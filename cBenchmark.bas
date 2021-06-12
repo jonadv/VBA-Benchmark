@@ -32,7 +32,7 @@ Option Explicit
 ' = (QPC2 - QPC1) / QPF
 ' = TicDiff / QPF
 
-'ticst t to seconds s = t/(s * 1)
+'tics t to seconds s = t/(s * 1)
 'tics to milliseconds = t/(s * 1e3)
 'tics to microseconds = t/(s * 1e6)
 'tics to nanoseconds = t/(s * 1e9)
@@ -45,6 +45,7 @@ Private arrStamp() As Currency              'stores QPC stamps
 Private arrStampID() As Byte                'stores id numbers of track calls. Byte = 0-255, so max 256 tracks, using Byte forces ID of 0 or above
 Private dicStampName_ID As Dictionary       'key = custom name, value = StampID
 Private Const fromCurr As Currency = 10000  'QPC and QPF downscale LongLong (actual returntype) with 10000 when they return a value with datatype Currency
+Private stamp_ReportEnd As Currency               'set at start of Report calculation. Prevents output of report when it was less then x amount of seconds ago
 Private time_start As Double
 Private time_end As Double
 Private Const overheadTestCount As Long = 100 'Overhead is tested in a loop. Lowering this ammount a lot might increase overhead because of CPU branching.
@@ -140,7 +141,6 @@ End Sub
 
 Public Sub Start()
     Reset 're-initialize all
-    time_start = CurrentTimeMillis 'accurate system timestamp in milliseconds
     TrackByID TrackID.id_start
 End Sub
 Public Sub Pause()
@@ -208,6 +208,15 @@ Private Sub ReportArg(Optional ByVal boExtendedReport As Boolean = False, _
                         Optional ByVal boForceMillis As Boolean = False, _
                         Optional ByVal boForceNanos As Boolean = False)
 
+'dont generate report if it was generated less then 5 seconds ago (f.e. when ReportCustom was called at end of code, ignore print call from Class_Terminate)
+Dim stamp_ReportStart As Currency
+QueryPerformanceCounter stamp_ReportStart
+If stamp_ReportEnd > 0 Then If ticsToSeconds(stampsToTics(stamp_ReportEnd, stamp_ReportStart)) < 5 Then Exit Sub
+
+'Nothing to report when only .Start (1 stamp) was called
+If stampCount < 2 Then GoTo theEnd
+
+'Start report with dimensions
 Dim i As Long                           'index number at various places
 Dim v As Variant
 
@@ -233,20 +242,12 @@ Dim arrReport() As Variant              'holds report values as (2D) table
 Dim col As Long, row As Long            'index numbers used for looping in arrReport
 Dim strID As String                     'IDnr of stamp as string
 
-'dont generate report if it was generated less then 10 seconds ago (f.e. when ReportCustom was called at end of code)
-If time_end > 0 And time_end - CurrentTimeMillis > 10000 Then GoTo theEnd
 
-'Nothing to report when only .Start (1 stamp) was called
-If stampCount < 2 Then GoTo theEnd
-
-'timestamp of code end (= Class_Terminate = end of running code)
-time_end = CurrentTimeMillis
 
 'calculate tic-differences (TicDiffs) per Track-call and store in evenly sized array
-
 ReDim arTicDiffs(LBound(arrStamp) To stampCount)
 For i = LBound(arrStamp) To stampCount 'LBound always is start-stamp
-    arTicDiffs(i) = stampsToTics(i - 1, i)
+    arTicDiffs(i) = stampsToTics_fromArrays(i - 1, i)
 Next i
     
 'seperate TicDiffs into ID-specific collection (most time consuming step in this sub)
@@ -409,11 +410,13 @@ If boTransposeReport Then arrReport = Transpose2DArray(arrReport)
 Array2DToImmediate (arrReport)
 
 theEnd:
-Debug.Print "Total time since Start millis:   " & IIf(time_end - time_start = 0, "<1 ms", secondsProperString((time_end - time_start) / 1000))
-Debug.Print "Total time since Start stamp:    " & secondsProperString(ticsToSeconds(stampsToTics(LBound(arrStamp) + 1, stampCount)))
-Debug.Print "Time to calculate report:  " & IIf(CurrentTimeMillis - time_end = 0, "<1 ms", secondsProperString((CurrentTimeMillis - time_end) / 1000))
+QueryPerformanceCounter stamp_ReportEnd
+Debug.Print "Total time since Start stamp:    " & secondsProperString(ticsToSeconds(stampsToTics_fromArrays(LBound(arrStamp) + 1, stampCount)))
+Debug.Print "Time to calculate report stamps: " & secondsProperString(ticsToSeconds(stampsToTics(stamp_ReportStart, stamp_ReportEnd)))
 Debug.Print "Max precision:             " & secondsProperString(Precision, True)
 Debug.Print ""
+
+
 End Sub
 
 ' ============================================= '
@@ -546,8 +549,17 @@ new_item:
   Resume
 End Function
 
-Private Function stampsToTics(ByVal stampNrBefore As Long, ByVal stampNrAfter As Long) As Currency
-'Calculates the difference in tics between to recorded QPC stamps and upscales them from Currency to whole numbers
+Private Function stampsToTics_fromArrays(ByVal stampNrBefore As Long, ByVal stampNrAfter As Long) As Currency
+'Gets stamps from arrays and return difference in tics between them
+If stampNrBefore < LBound(arrStamp) Then
+    stampsToTics_fromArrays = 0
+Else
+    stampsToTics_fromArrays = stampsToTics(arrStamp(stampNrBefore), arrStamp(stampNrAfter))
+End If
+End Function
+
+Private Function stampsToTics(ByVal stampBefore As Currency, ByVal stampAfter As Currency) As Currency
+'Calculates the difference in between to QPC stamps and upscales them from Currency to whole numbers
 
 'example returns of QPC
 '- as Currency -> 304462680,3775    --> needs upscaling by 10.000
@@ -558,11 +570,7 @@ Private Function stampsToTics(ByVal stampNrBefore As Long, ByVal stampNrAfter As
 '- as Currency ->     1000  =      1.000
 '- as LongLong -> 10000000  = 10.000.000
 
-If stampNrBefore < LBound(arrStamp) Then
-    stampsToTics = 0
-Else
-    stampsToTics = (arrStamp(stampNrAfter) - arrStamp(stampNrBefore)) * fromCurr
-End If
+stampsToTics = (stampAfter - stampBefore) * fromCurr
 End Function
 Private Function ticsToSeconds(ByVal tics As Currency) As Double
     If Int(tics) <> tics Or Int(freq) <> freq Then err.Raise 9999999, , "QPC or QPF returns with datatype As Currency downscales the returns with 10 000. Upscale both returns before calling this funciton."
@@ -635,7 +643,6 @@ End Function
 ' @Min
 ' @Max
 ' @MedianOfFirst_x_Elements
-' @CurrentTimeMillis
 ' @RIGHT_AfterLastCharsOf
 ' @Array2DToImmediate
 
@@ -691,16 +698,6 @@ Private Function QuickSortArray(ByRef vArray As Variant, inLow As Long, inHi As 
     
     If (inLow < tmpHi) Then QuickSort vArray, inLow, tmpHi
     If (tmpLow < inHi) Then QuickSort vArray, tmpLow, inHi
-End Function
-Private Function CurrentTimeMillis() As Double
-    ' Returns the milliseconds from 1970/01/01 00:00:00.0 to system UTC
-    Dim st As SYSTEMTIME
-    GetSystemTime st
-    Dim t_Start, t_Now
-    t_Start = DateSerial(1970, 1, 1)
-    t_Now = DateSerial(st.wYear, st.wMonth, st.wDay) + _
-        TimeSerial(st.wHour, st.wMinute, st.wSecond)
-    CurrentTimeMillis = DateDiff("s", t_Start, t_Now) * 1000 + st.wMilliseconds
 End Function
 
 Private Function RIGHT_AfterLastCharsOf(ByVal strLeft As String, ByVal chars As String) As String
