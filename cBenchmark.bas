@@ -16,18 +16,10 @@ Option Explicit
     Private Declare Sub GetSystemTime Lib "kernel32" (lpSystemTime As SYSTEMTIME)
 #End If
 
-'returns of QPC
-'- as Currency -> 304462680,3775
-'- as LongLong -> 3044898189059
-
-'returns of QPF
-'With a usual QPF on windows 10 (10MHz):
-'- as Currency ->     1000  =      1.000
-'- as LongLong -> 10000000  = 10.000.000
 '---> 10 million tics per second
 '---> if freq is 10MHz then:
-'   1 tic = (1 / 10 000 000) * second
-'   1 tic = 0.000001 seconds
+'   1 tic = (1 / 10 000 000) seconds
+'   1 tic = 0.0000001 seconds
 '   1 tic = 0.0001 milliseconds
 '   1 tic = 0.1 microseconds
 '   1 tic = 100 nanoseconds
@@ -44,6 +36,18 @@ Option Explicit
 'tics to milliseconds = t/(s * 1e3)
 'tics to microseconds = t/(s * 1e6)
 'tics to nanoseconds = t/(s * 1e9)
+
+
+Private freq As Currency                    'frequency is the amount tics per second
+Private stampCount As Long                  'to keep track of postition of next stamp and stampID in arrays
+Private currentArraySizes As Long           'to prevent calling Ubound(arrStamps) every time
+Private arrStamp() As Currency              'stores QPC stamps
+Private arrStampID() As Byte                'stores id numbers of track calls. Byte = 0-255, so max 256 tracks, using Byte forces ID of 0 or above
+Private dicStampName_ID As Dictionary       'key = custom name, value = StampID
+Private Const fromCurr As Currency = 10000  'QPC and QPF downscale LongLong (actual returntype) with 10000 when they return a value with datatype Currency
+Private time_start As Double
+Private time_end As Double
+Private Const overheadTestCount As Long = 100 'Overhead is tested in a loop. Lowering this ammount a lot might increase overhead because of CPU branching.
 
 Private Type SYSTEMTIME
     wYear As Integer
@@ -62,18 +66,6 @@ Private Enum TrackID
     id_pause = 253
     id_resizingarray = 252
 End Enum
-
-Private freq As Currency                    'frequency is the amount of tics of the QPC per second
-Private stampCount As Long                  'to keep track of postition of next stamp and stampID in arrays
-Private currentArraySizes As Long           'to prevent calling Ubound(arrStamps) every time
-Private arrStamp() As Currency              'stores QPC stamps. (0) = start
-Private arrStampID() As Byte                'stores id numbers of track calls. Byte = 0-255, so max 256 tracks, using Byte forces ID of 0 or above
-Private dicStampName_ID As Dictionary       'key = custom name, value = StampID
-Private Const fromCurr As Currency = 10000  'QPC and QPF downscales LongLong (actual returntype) with 10000 when return value to Currency datatype
-Private time_start As Double
-Private time_end As Double
-Private Const overheadTestCount As Long = 100 'Overhead is tested in a loop. Lowering this ammount a lot might increase overhead because of CPU branching.
-
 
 'include CTimer.Pause (stores timestamp) and .Continue (should give error when previous call wasnt a pause. Might need track ID as argument?).
 'include setting time unit of output (nanos, millis, seconds, etc). calcualte default at end by total time passed
@@ -94,6 +86,8 @@ Private Sub Class_Initialize()
 End Sub
 Private Sub Class_Terminate()
     Report                                          'print report with default settings when code is finished (to debug immediate window)
+'    Reset
+'    time_start = 0
 End Sub
 
 ' ============================================= '
@@ -103,9 +97,9 @@ End Sub
 ' @TrackByName      - Same as @TrackByID but more convenient (and thus with a bit more overhead)
 ' @Start            - (Start) or (Reset and Restart) benchmark
 ' @Pause            - Convenience method to exclude pieces of code, use in combination with .Continue
-' @Continue          - Use after calling .Pause to continue tracking
+' @Continue         - Use after calling .Pause to continue tracking
 ' @Report           - Generate report with default settings
-' ReportCustomized  - Generate report with specifewied settings
+' ReportCustom  - Generate report with specified settings
 
 Public Sub TrackByID(ByVal IDnr As Byte)
     'the fastest possible way (as in with least amount of overhead) to store
@@ -119,7 +113,7 @@ Public Sub TrackByID(ByVal IDnr As Byte)
     'store id nr in seperate samesized array
     arrStampID(stampCount) = IDnr
     
-    
+    'check array sizes for next stamp
     If stampCount = currentArraySizes Then
         'required to prevent array out of bound (it's either this
         'if-then or set the arrays to (large) fixed sizes (and still
@@ -150,23 +144,23 @@ Public Sub Start()
     TrackByID TrackID.id_start
 End Sub
 Public Sub Pause()
-'Use in combination with .Continue to exclude code from being benched.
+'Use in combination with .Continue to exclude code from being tracked
 'Is only included in report if boExtendedReport is set to True
     TrackByID TrackID.id_pause
 End Sub
 Public Sub Continue()
-'Use in combination with .Pause to exclude code from being benched.
+'Use in combination with .Pause to exclude code from being tracked
 'Is only included in report if boExtendedReport is set to True
     TrackByID TrackID.id_continue
 End Sub
 Public Sub Report()
 'Calculate and output report with default settings.
-'Can be called from Immediate window or while running code
+'Can be called from Immediate window or in break mode/while running code
     ReportArg
 End Sub
 
-Public Sub ReportCustomized(Optional ByVal boExtendedReport As Boolean = False, _
-                        Optional ByVal boTransposeReport As Boolean = True, _
+Public Sub ReportCustom(Optional ByVal boExtendedReport As Boolean = False, _
+                        Optional ByVal boTransposeReport As Boolean = False, _
                         Optional ByVal OutputToRange As Range = Nothing, _
                         Optional ByVal boCorrectOverhead As Boolean = False, _
                         Optional ByVal boForceMillis As Boolean = False)
@@ -181,11 +175,9 @@ End Sub
 ' @RedimStampArrays
 ' @ReportArg
 Private Sub Reset()
-'Make sure frequency is set right (in cace instance of this class is declared public static)
-    QueryPerformanceFrequency freq
+'Sub is private as public method .Start does the same
+    QueryPerformanceFrequency freq      'Make sure frequency is set right (in cace instance of this class is declared public static)
     freq = freq * fromCurr
-    
-'Set to private as public method .Start does the same
     stampCount = 0
     currentArraySizes = 0
     RedimStampArrays
@@ -210,30 +202,27 @@ Private Sub RedimStampArrays()
     End If
 End Sub
 
-
 Private Sub ReportArg(Optional ByVal boExtendedReport As Boolean = False, _
-                        Optional ByVal boTransposeReport As Boolean = True, _
+                        Optional ByVal boTransposeReport As Boolean = False, _
                         Optional ByVal OutputToRange As Range = Nothing, _
                         Optional ByVal boForceMillis As Boolean = False, _
                         Optional ByVal boForceNanos As Boolean = False)
-                        
-'dont generate report if it was generated less then 10 seconds ago (f.e. when ReportCustumized was called at end of code)
+
+
+'dont generate report if it was generated less then 10 seconds ago (f.e. when ReportCustom was called at end of code)
 If time_end > 0 And time_end - CurrentTimeMillis > 10000 Then GoTo theEnd
 
-If stampCount < 2 Then GoTo theEnd 'Nothing to report when only .Start (1 stamp) was called
+'Nothing to report when only .Start (1 stamp) was called
+If stampCount < 2 Then GoTo theEnd
 
-time_end = CurrentTimeMillis 'accurate timestamp of code end (= Class_Terminate = end of code)
-
+'timestamp of code end (= Class_Terminate = end of running code)
+time_end = CurrentTimeMillis
 
 'calculate tic-differences (TicDiffs) per Track-call and store in evenly sized array
-Dim i As Long, dFirstLast As New Dictionary
+Dim i As Long
 Dim arTicDiffs() As Currency: ReDim arTicDiffs(LBound(arrStamp) To stampCount)
 For i = LBound(arrStamp) To stampCount 'LBound always is start-stamp
-    If boExtendedReport And False Then 'Falsed out -> For later uses, when using RDTSC instead of QPC
-        If Not dFirstLast.Exists(arrStampID(i) & "_fst") Then dFirstLast.Add arrStampID(i) & "_fst", arrStamp(i) * fromCurr
-        dFirstLast.Item(arrStampID(i) & "_lst") = arrStamp(i) * fromCurr
-    End If
-    If i = LBound(arrStamp) Then arTicDiffs(i) = 0 Else arTicDiffs(i) = (arrStamp(i) - arrStamp(i - 1)) * fromCurr 'upscale to whole number
+    arTicDiffs(i) = stampsToTics(i - 1, i)
 Next i
     
 'seperate TicDiffs into ID-specific collection (most time consuming step in this sub)
@@ -254,11 +243,14 @@ End If
 
 Dim dAll As New Dictionary, keys_ids As Variant, col_item As Variant, v As Variant
 'check if TrackByName method is used and store names
-'do before overhead calculations as overhead-test checks for names used
+'If TrackByName is not used, name-column won't be printed, so print Totals-name in IDnr column
 If dicStampName_ID.Count > 0 Then
     For Each v In dicStampName_ID.keys()
         dAll.Item(dicStampName_ID(v) & "_Name") = v
     Next v
+    dAll.Item("TOTAL" & "_Name") = "TOTAL"
+Else
+    dAll.Item("TOTAL_IDnr") = "TOTAL"
 End If
 
 'UDT's in VBA can't be stored in a collection/dictionary inside a class module,
@@ -269,10 +261,9 @@ End If
 'of UDT's, but that would require adjustments on 3 places: at top of the class, at calculation and
 'at report formatting. In current set up, these three things are done at the same place.
 Dim ticsOverhead As Double
-Dim cntTic As Double, minTic As Double, maxTic As Double, sumTics As Double, avrTics As Double, elapsedTot As Double
-Dim sumAllTics As Double: sumAllTics = 0
-Dim cntAllTics As Double: cntAllTics = 0
-Dim colTicDiffs As New Collection, key_idnr As Variant, seconds As Double
+Dim cntTic As Double, sumTics As Double, minTic As Double, maxTic As Double, avrTics As Double, elapsedTot As Double
+Dim cntAllTics As Double, sumAllTics As Double: cntAllTics = 0: sumAllTics = 0
+Dim colTicDiffs As New Collection, key_idnr As Variant
 For Each key_idnr In dID_colTicDiffs.keys 'loop all identical IDnrs
     
     dAll.Item(key_idnr & "_IDnr") = key_idnr
@@ -305,13 +296,12 @@ For Each key_idnr In dID_colTicDiffs.keys 'loop all identical IDnrs
     dAll.Add v & "_Time sum", secondsProperString(ticsToSeconds(sumTics), boForceMillis, boForceNanos)
     
     If Not boExtendedReport Then GoTo nextV_SkipExtendedOutput
-' ----------------- Output for extended report: -----------------
+' ---------------------- Output for extended report: ----------------------
     
-    dAll.Add v & "_Minimum", FormatNumber(minTic)
-    dAll.Add v & "_Maximum", FormatNumber(maxTic)
+    dAll.Add v & "_Minimum", minTic
+    dAll.Add v & "_Maximum", maxTic
     dAll.Add v & "_Average", FormatNumber(sumTics / cntTic)
     dAll.Add v & "_Median", FormatNumber(MedianOfFirst_x_Elements(colTicDiffs, 1000)) 'Only from first 1000 tic measurements
-'    dAll.Add v & "_ElapsedTot", (dFirstLast(v & "_lst") - dFirstLast(v & "_fst"))
     
 'overhead
 'Standard TrackID's (fe id_pause) test to False here as there isnt a string name in
@@ -339,7 +329,7 @@ For Each key_idnr In dID_colTicDiffs.keys 'loop all identical IDnrs
 nextV_SkipExtendedOutput:
 Next key_idnr
 
-'restores global variables, does nothing if not called before
+'restores statically stored stamp arrays, does nothing if not called before
 v = OverheadPerTrackCall(v, "restore")
 
 'calculate percentage per ID, now that sumAllTics is known
@@ -349,7 +339,6 @@ For Each key_idnr In dID_colTicDiffs.keys 'all identical IDnrs
 Next key_idnr
 
 'calculate totals
-dAll.Item("TOTAL" & "_Name") = "TOTAL"
 dAll.Item("TOTAL" & "_Count") = FormatNumber(cntAllTics, 0)
 dAll.Item("TOTAL" & "_Sum of tics") = FormatNumber(sumAllTics, 0)
 dAll.Item("TOTAL" & "_Percentage") = FormatPercent(dAll.Item("TOTAL" & "_Sum of tics") / sumAllTics)
@@ -371,9 +360,9 @@ Next v
 Dim arrReport() As Variant
 Dim header As Variant, id As String, c As Long, r As Long: c = 0: r = 0 'column, row
 ReDim arrReport(1 To dHeaders.Count, 1 To dID_colTicDiffs.Count + 1 + 1) 'arrReport(headers, datarows + headerrow + totalsrow)
-
-'Debug.Print JsonConverter.ConvertToJson(dAll)
-For i = -1 To 256 'Byte range is 0-255, minimum ID = 0, nr -1 for headers, nr 256 for TOTAL, sorted order (id_pause etc as last)
+'loop all possible ID numbers and store values of dAll in arrReport
+'Byte range is 0-255, minimum ID = 0, nr -1 for headers, nr 256 for TOTAL, sorted order (id_pause etc as last)
+For i = -1 To 256
     Select Case i
         Case -1:                'headers
         Case 256:               id = "TOTAL"
@@ -391,24 +380,21 @@ For i = -1 To 256 'Byte range is 0-255, minimum ID = 0, nr -1 for headers, nr 25
         Else
             If dAll.Exists(id & "_" & header) Then
                 arrReport(c, r) = dAll.Item(id & "_" & header)
-            Else
-                arrReport(c, r) = ""
             End If
         End If
     Next header
 nextI:
 Next i
 
+If boTransposeReport Then arrReport = Transpose2DArray(arrReport)
 
-'check if table has more columns then rows, if so transpose
-'If dHeaders.Count > UBound(arrReport, 2) Or dHeaders.Count > 8 Then arrReport = Transpose2DArray(arrReport)
-'If dHeaders.Count > 8 Or boTransposeReport Then arrReport = Transpose2DArray(arrReport)
 Array2DToImmediate (arrReport)
 
 theEnd:
-Debug.Print "Total time since Start:    " & secondsProperString((time_end - time_start) / 1000)
-Debug.Print "Time to calculate report:  " & secondsProperString((CurrentTimeMillis - time_end) / 1000)
-Debug.Print "Max precision:             " & secondsProperString(Precision)
+Debug.Print "Total time since Start millis:   " & IIf(time_end - time_start = 0, "<1 ms", secondsProperString((time_end - time_start) / 1000))
+Debug.Print "Total time since Start stamp:    " & secondsProperString(ticsToSeconds(stampsToTics(LBound(arrStamp) + 1, stampCount)))
+Debug.Print "Time to calculate report:  " & IIf(CurrentTimeMillis - time_end = 0, "<1 ms", secondsProperString((CurrentTimeMillis - time_end) / 1000))
+Debug.Print "Max precision:             " & secondsProperString(Precision, True)
 Debug.Print ""
 End Sub
 
@@ -542,8 +528,27 @@ new_item:
   Resume
 End Function
 
+Private Function stampsToTics(ByVal stampNrBefore As Long, ByVal stampNrAfter As Long) As Currency
+'Calculates the difference in tics between to recorded QPC stamps and upscales them from Currency to whole numbers
+
+'example returns of QPC
+'- as Currency -> 304462680,3775    --> needs upscaling by 10.000
+'- as LongLong -> 3044626803775
+
+'example returns of QPF (is system specific, but commonly 10Mhz on Windows 10):
+'With a usual QPF on windows 10 (10MHz):
+'- as Currency ->     1000  =      1.000
+'- as LongLong -> 10000000  = 10.000.000
+
+If stampNrBefore < LBound(arrStamp) Then
+    stampsToTics = 0
+Else
+    stampsToTics = (arrStamp(stampNrAfter) - arrStamp(stampNrBefore)) * fromCurr
+End If
+End Function
 Private Function ticsToSeconds(ByVal tics As Currency) As Double
     If Int(tics) <> tics Or Int(freq) <> freq Then err.Raise 9999999, , "QPC or QPF returns with datatype As Currency downscales the returns with 10 000. Upscale both returns before calling this funciton."
+    'Int(freq) is actually not a proper check to see if it has been upscaled, as it is often also a round number when downscaled (10mhz)
     ticsToSeconds = tics / freq 'time in seconds
 End Function
 Private Function secondsProperString(ByVal t As Double, _
@@ -690,46 +695,58 @@ End Function
 Private Sub Array2DToImmediate(ByVal arr As Variant)
 'Prints a 2D-array of values to a table (with same sized column widhts) in the immmediate window
 
-'Each character in the Immediate window of Visual Basic (CTRL+G to show) has the same pixel width,
+'Each character in the Immediate window of VB Editor (CTRL+G to show) has the same pixel width,
 'thus giving the option to output a proper looking 2D-array (a table with variable string lenghts).
 
 'settings
 Dim spaces_between_collumns As Long: spaces_between_collumns = 2
-Dim boOutlineRight As Boolean: boOutlineRight = True
-Dim NrOfColsToNotOutlineRight As Long: NrOfColsToNotOutlineRight = 2 'IDnr and Name
-
+Dim NrOfColsToOutlineLeft As Long: NrOfColsToOutlineLeft = 2    'all cols are outlined right, except for first x (2 here, so IDnr and Name)
+Dim maxLength As Long: maxLength = 198 * 1021&                  'capacity of Immediate window is about 200 lines of 1021 characters per line.
 Dim i As Long, j As Long
 Dim arrMaxLenPerCol() As Long
+Dim str As String
+
+'determine max stringlength per column
 ReDim arrMaxLenPerCol(UBound(arr, 1))
 For i = LBound(arr, 1) To UBound(arr, 1)
     For j = LBound(arr, 2) To UBound(arr, 2)
-            'determine max stringlength per column
-            arrMaxLenPerCol(i) = IIf(Len(arr(i, j)) > arrMaxLenPerCol(i), Len(arr(i, j)), arrMaxLenPerCol(i))
+        arrMaxLenPerCol(i) = IIf(Len(arr(i, j)) > arrMaxLenPerCol(i), Len(arr(i, j)), arrMaxLenPerCol(i))
     Next j
 Next i
 
-Dim str As String
-ReDim arrValLen(LBound(arr, 1) To UBound(arr, 1), LBound(arr, 2) To UBound(arr, 2))
+'build table
 For j = LBound(arr, 2) To UBound(arr, 2)
     For i = LBound(arr, 1) To UBound(arr, 1)
-        If boOutlineRight And i > NrOfColsToNotOutlineRight Then 'except for 1st column
-            On Error Resume Next
-            str = str & space$((arrMaxLenPerCol(i) - Len(arr(i, j)) + spaces_between_collumns) * 1) & arr(i, j)
-        Else
+        'outline left --> value & spaces & column_spaces
+        If i < NrOfColsToOutlineLeft Then
             On Error Resume Next
             str = str & arr(i, j) & space$((arrMaxLenPerCol(i) - Len(arr(i, j)) + spaces_between_collumns) * 1)
+        
+        'last column to outline left --> value & spaces
+        ElseIf i = NrOfColsToOutlineLeft Then
+            On Error Resume Next
+            str = str & arr(i, j) & space$((arrMaxLenPerCol(i) - Len(arr(i, j))) * 1)
+                    
+        'outline right --> spaces & column_spaces & value
+        Else 'i > NrOfColsToOutlineLeft Then
+            On Error Resume Next
+            str = str & space$((arrMaxLenPerCol(i) - Len(arr(i, j)) + spaces_between_collumns) * 1) & arr(i, j)
         End If
     Next i
-    'capacity of Immediate window is about 200 lines of max 1021 characters per line.
-    str = Left(str, 1020) & vbNewLine
+    str = str & vbNewLine
+    If Len(str) > maxLength Then GoTo theEnd
 Next j
 
-'capacity of Immediate window is about 200 lines of max 1021 characters per line.
-Debug.Print Left$(str, (190 * 1021#))
+theEnd:
+'capacity of Immediate window is about 200 lines of 1021 characters per line.
+If Len(str) > maxLength Then str = Left(str, maxLength) & vbNewLine & " - Table to large for Immediate window"
+Debug.Print str
 End Sub
 
 Private Function Transpose2DArray(arr() As Variant) As Variant()
-Dim arTemp() As Variant, c As Long, r As Long
+Dim arTemp() As Variant
+Dim c As Long
+Dim r As Long
 ReDim arTemp(LBound(arr, 2) To UBound(arr, 2), LBound(arr, 1) To UBound(arr, 1))
 For r = LBound(arTemp, 1) To UBound(arTemp, 1)
     For c = LBound(arTemp, 2) To UBound(arTemp, 2)
@@ -738,6 +755,3 @@ For r = LBound(arTemp, 1) To UBound(arTemp, 1)
 Next r
 Transpose2DArray = arTemp
 End Function
-
-
-
