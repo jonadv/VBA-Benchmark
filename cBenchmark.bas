@@ -208,6 +208,30 @@ Private Sub ReportArg(Optional ByVal boExtendedReport As Boolean = False, _
                         Optional ByVal boForceMillis As Boolean = False, _
                         Optional ByVal boForceNanos As Boolean = False)
 
+Dim i As Long                           'index number at various places
+Dim v As Variant
+
+Dim arTicDiffs() As Currency            'array to hold the differences between two stamps, same sized array as arrStamp and arrStampID
+Dim dID_colTicDiffs As New Dictionary   'key = IDnr, value = collection of time recordings (tics) per IDnr
+Dim key_idnr As Variant                 'used to loop through dID_colTicDiffs
+Dim colTicDiffs As New Collection       'collection of TicDiffs coming out of dID_colTicDiffs
+Dim col_item As Variant                 'used to loop through tic(difss) in colTicDiffs
+
+Dim cntTic As Double                    'tic-values for report
+Dim sumTics As Double
+Dim minTic As Double
+Dim maxTic As Double
+Dim avrTics As Double
+Dim cntAllTics As Double
+Dim sumAllTics As Double
+Dim ticsOverhead As Double
+
+Dim dAll As New Dictionary              'temp to hold the values of the output report. key = IDnr concatenated with the ValueType
+Dim dHeaders As New Dictionary          'dict to filter out unique ValueTypes out of dAll
+Dim header As Variant                   'loop through keys in dHeaders
+Dim arrReport() As Variant              'holds report values as (2D) table
+Dim col As Long, row As Long            'index numbers used for looping in arrReport
+Dim strID As String                     'IDnr of stamp as string
 
 'dont generate report if it was generated less then 10 seconds ago (f.e. when ReportCustom was called at end of code)
 If time_end > 0 And time_end - CurrentTimeMillis > 10000 Then GoTo theEnd
@@ -219,14 +243,13 @@ If stampCount < 2 Then GoTo theEnd
 time_end = CurrentTimeMillis
 
 'calculate tic-differences (TicDiffs) per Track-call and store in evenly sized array
-Dim i As Long
-Dim arTicDiffs() As Currency: ReDim arTicDiffs(LBound(arrStamp) To stampCount)
+
+ReDim arTicDiffs(LBound(arrStamp) To stampCount)
 For i = LBound(arrStamp) To stampCount 'LBound always is start-stamp
     arTicDiffs(i) = stampsToTics(i - 1, i)
 Next i
     
 'seperate TicDiffs into ID-specific collection (most time consuming step in this sub)
-Dim dID_colTicDiffs As New Dictionary 'key = IDnr, value = collection of time recordings (tics) per IDnr
 Set dID_colTicDiffs = ticsToCollectionsInDictionaryPerID(arTicDiffs, LBound(arTicDiffs))
 'example result in jsonformat: {"255":[0],"1":[156],"2":[675,766,523,764,651]}
 
@@ -241,7 +264,6 @@ End If
 'dID_colTicDiffs.Remove dicStampName_ID("Initialisation")
 'dicStampName_ID.Remove "Initialisation"
 
-Dim dAll As New Dictionary, keys_ids As Variant, col_item As Variant, v As Variant
 'check if TrackByName method is used and store names
 'If TrackByName is not used, name-column won't be printed, so print Totals-name in IDnr column
 If dicStampName_ID.Count > 0 Then
@@ -260,10 +282,8 @@ End If
 'Another option would be ADO Recordset, but that would require an additional Tools reference. Or just an array
 'of UDT's, but that would require adjustments on 3 places: at top of the class, at calculation and
 'at report formatting. In current set up, these three things are done at the same place.
-Dim ticsOverhead As Double
-Dim cntTic As Double, sumTics As Double, minTic As Double, maxTic As Double, avrTics As Double, elapsedTot As Double
-Dim cntAllTics As Double, sumAllTics As Double: cntAllTics = 0: sumAllTics = 0
-Dim colTicDiffs As New Collection, key_idnr As Variant
+
+cntAllTics = 0: sumAllTics = 0
 For Each key_idnr In dID_colTicDiffs.keys 'loop all identical IDnrs
     
     dAll.Item(key_idnr & "_IDnr") = key_idnr
@@ -280,11 +300,11 @@ For Each key_idnr In dID_colTicDiffs.keys 'loop all identical IDnrs
     cntTic = 0: minTic = 1E+15: maxTic = 0: sumTics = 0: avrTics = 0
     'break here to see the cpu tic-differences in between TrackBy calls
     For Each col_item In colTicDiffs
-        v = col_item 'ammount of tics
+        'col_item = ammount of tics
         cntTic = cntTic + 1
-        minTic = Min(minTic, v)
-        maxTic = Max(maxTic, v)
-        sumTics = sumTics + v
+        minTic = Min(minTic, col_item)
+        maxTic = Max(maxTic, col_item)
+        sumTics = sumTics + col_item
     Next col_item
     sumAllTics = sumAllTics + sumTics
     cntAllTics = cntAllTics + cntTic
@@ -351,35 +371,33 @@ End If
 'dAll now holds all the values for the report. key = IDnr_ValueType, value = value
 
 'add unique headers for output table
-Dim dHeaders As New Dictionary
 dHeaders.Add "IDnr", 1 'makes sure IDnr is first/most left column
 For Each v In dAll.keys
     dHeaders.Item(RIGHT_AfterLastCharsOf(v, "_")) = 0
 Next v
 
-Dim arrReport() As Variant
-Dim header As Variant, id As String, c As Long, r As Long: c = 0: r = 0 'column, row
+col = 0: row = 0 'column, row
 ReDim arrReport(1 To dHeaders.Count, 1 To dID_colTicDiffs.Count + 1 + 1) 'arrReport(headers, datarows + headerrow + totalsrow)
 'loop all possible ID numbers and store values of dAll in arrReport
 'Byte range is 0-255, minimum ID = 0, nr -1 for headers, nr 256 for TOTAL, sorted order (id_pause etc as last)
 For i = -1 To 256
     Select Case i
         Case -1:                'headers
-        Case 256:               id = "TOTAL"
+        Case 256:               strID = "TOTAL"
         Case Else
-            id = i & ""
-            If Not dID_colTicDiffs.Exists(id) Then GoTo nextI
+            strID = i & ""
+            If Not dID_colTicDiffs.Exists(strID) Then GoTo nextI
     End Select
-    r = r + 1
-    c = 0
+    row = row + 1
+    col = 0
     
     For Each header In dHeaders.keys()
-        c = c + 1
-        If r = 1 Then
-            arrReport(c, r) = header
+        col = col + 1
+        If row = 1 Then
+            arrReport(col, row) = header
         Else
-            If dAll.Exists(id & "_" & header) Then
-                arrReport(c, r) = dAll.Item(id & "_" & header)
+            If dAll.Exists(strID & "_" & header) Then
+                arrReport(col, row) = dAll.Item(strID & "_" & header)
             End If
         End If
     Next header
@@ -755,3 +773,6 @@ For r = LBound(arTemp, 1) To UBound(arTemp, 1)
 Next r
 Transpose2DArray = arTemp
 End Function
+
+
+
