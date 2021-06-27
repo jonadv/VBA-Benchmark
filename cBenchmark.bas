@@ -9,11 +9,9 @@ Option Explicit
 #If VBA7 Then
     Private Declare PtrSafe Function QueryPerformanceCounter Lib "kernel32" (stamp As Currency) As Byte
     Private Declare PtrSafe Function QueryPerformanceFrequency Lib "kernel32" (freq As Currency) As Byte
-    Private Declare PtrSafe Sub GetSystemTime Lib "kernel32" (lpSystemTime As SYSTEMTIME)
 #Else
     Private Declare Function QueryPerformanceCounter Lib "kernel32" (stamp As Currency) As Byte
     Private Declare Function QueryPerformanceFrequency Lib "kernel32" (freq As Currency) As Byte
-    Private Declare Sub GetSystemTime Lib "kernel32" (lpSystemTime As SYSTEMTIME)
 #End If
 
 '---> 10 million tics per second
@@ -37,7 +35,6 @@ Option Explicit
 'tics to microseconds = t/(s * 1e6)
 'tics to nanoseconds = t/(s * 1e9)
 
-
 Private freq As Currency                    'frequency is the amount tics per second
 Private stampCount As Long                  'to keep track of postition of next stamp and stampID in arrays
 Private currentArraySizes As Long           'to prevent calling Ubound(arrStamps) every time
@@ -45,21 +42,10 @@ Private arrStamp() As Currency              'stores QPC stamps
 Private arrStampID() As Byte                'stores id numbers of track calls. Byte = 0-255, so max 256 tracks, using Byte forces ID of 0 or above
 Private dicStampName_ID As Dictionary       'key = custom name, value = StampID
 Private Const fromCurr As Currency = 10000  'QPC and QPF downscale LongLong (actual returntype) with 10000 when they return a value with datatype Currency
-Private stamp_ReportEnd As Currency               'set at start of Report calculation. Prevents output of report when it was less then x amount of seconds ago
+Private stamp_ReportEnd As Currency         'set at start of Report calculation. Prevents output of report when it was less then x amount of seconds ago
 Private time_start As Double
 Private time_end As Double
 Private Const overheadTestCount As Long = 100 'Overhead is tested in a loop. Lowering this ammount a lot might increase overhead because of CPU branching.
-
-Private Type SYSTEMTIME
-    wYear As Integer
-    wMonth As Integer
-    wDayOfWeek As Integer
-    wDay As Integer
-    wHour As Integer
-    wMinute As Integer
-    wSecond As Integer
-    wMilliseconds As Integer
-End Type
 
 Private Enum TrackID
     id_start = 255
@@ -94,18 +80,21 @@ End Sub
 ' ============================================= '
 ' Public Functions
 ' ============================================= '
-' @TrackByID        - Store QPC (cycle counts) in an array
-' @TrackByName      - Same as @TrackByID but more convenient (and thus with a bit more overhead)
+' @TrackByTheID     - Store QPC (cycle counts) in an array
+' @TrackByName      - Same as @TrackByTheID but more convenient (and thus with a bit more overhead)
 ' @Start            - (Start) or (Reset and Restart) benchmark
 ' @Pause            - Convenience method to exclude pieces of code, use in combination with .Continue
 ' @Continue         - Use after calling .Pause to continue tracking
 ' @Report           - Generate report with default settings
-' ReportCustom  - Generate report with specified settings
+' ReportCustom      - Generate report with specified settings
 
-Public Sub TrackByID(ByVal IDnr As Byte)
+Public Sub TrackByTheID(ByVal IDnr As Byte)
     'the fastest possible way (as in with least amount of overhead) to store
     'cpu stamps of QPC function is to store them in an array
-
+    
+    'sub was called TrackByID before, but then intellisense shows it as first option/above TrackByName
+    'when only typing 'tra'. This way typing 'tra' + tab should be enough.
+    
     stampCount = stampCount + 1
     
     'store cpu stampcount in array
@@ -123,40 +112,40 @@ Public Sub TrackByID(ByVal IDnr As Byte)
         RedimStampArrays
         
         'redim can be time consuming so exclude this from recording.
-        TrackByID TrackID.id_resizingarray
+        TrackByTheID TrackID.id_resizingarray
     End If
 End Sub
 Public Sub TrackByName(ByVal strTrackName As String)
     'intermediate/more convenient way to call track method
-    'if TrackById and TrackByName are used mixed, some tracks might write to the same ID
+    'if TrackByTheID and TrackByName are used mixed, some tracks might write to the same ID
     'reference type ByVal can save a few clock cycles https://stackoverflow.com/questions/408101/which-is-faster-byval-or-byref
     
     'when count = 0, it adds an IDnr of 0, count = 1 adds IDnr 1, etc
     If Not dicStampName_ID.Exists(strTrackName) Then dicStampName_ID.Add strTrackName, CByte(dicStampName_ID.Count)
     
-    'gets IDnr and passes it as argument when calling TrackById
-    TrackByID dicStampName_ID(strTrackName)
+    'gets IDnr and passes it as argument when calling TrackByTheID
+    TrackByTheID dicStampName_ID(strTrackName)
 
 End Sub
 
 Public Sub Start()
     Reset 're-initialize all
-    TrackByID TrackID.id_start
+    TrackByTheID TrackID.id_start
 End Sub
 Public Sub Pause()
 'Use in combination with .Continue to exclude code from being tracked
-'Is only included in report if boExtendedReport is set to True
-    TrackByID TrackID.id_pause
+'Is only included in output of report if boExtendedReport is set to True
+    TrackByTheID TrackID.id_pause
 End Sub
 Public Sub Continue()
 'Use in combination with .Pause to exclude code from being tracked
-'Is only included in report if boExtendedReport is set to True
-    TrackByID TrackID.id_continue
+'Is only included in output of report if boExtendedReport is set to True
+    TrackByTheID TrackID.id_continue
 End Sub
 Public Sub Report()
 'Calculate and output report with default settings.
 'Can be called from Immediate window or in break mode/while running code
-    ReportArg
+    ReportArg 'no arguments is default settings
 End Sub
 
 Public Sub ReportCustom(Optional ByVal boExtendedReport As Boolean = False, _
@@ -208,10 +197,11 @@ Private Sub ReportArg(Optional ByVal boExtendedReport As Boolean = False, _
                         Optional ByVal boForceMillis As Boolean = False, _
                         Optional ByVal boForceNanos As Boolean = False)
 
-'dont generate report if it was generated less then 5 seconds ago (f.e. when ReportCustom was called at end of code, ignore print call from Class_Terminate)
+'dont generate report if it was generated less then 1 seconds ago (f.e. when ReportCustom
+'was called at end of code, then ignore print call from Class_Terminate)
 Dim stamp_ReportStart As Currency
 QueryPerformanceCounter stamp_ReportStart
-If stamp_ReportEnd > 0 Then If ticsToSeconds(stampsToTics(stamp_ReportEnd, stamp_ReportStart)) < 5 Then Exit Sub
+If stamp_ReportEnd > 0 Then If ticsToSeconds(stampsToTics(stamp_ReportEnd, stamp_ReportStart)) < 1 Then Exit Sub
 
 'Nothing to report when only .Start (1 stamp) was called
 If stampCount < 2 Then GoTo theEnd
@@ -243,7 +233,6 @@ Dim col As Long, row As Long            'index numbers used for looping in arrRe
 Dim strID As String                     'IDnr of stamp as string
 
 
-
 'calculate tic-differences (TicDiffs) per Track-call and store in evenly sized array
 ReDim arTicDiffs(LBound(arrStamp) To stampCount)
 For i = LBound(arrStamp) To stampCount 'LBound always is start-stamp
@@ -268,12 +257,12 @@ End If
 'check if TrackByName method is used and store names
 'If TrackByName is not used, name-column won't be printed, so print Totals-name in IDnr column
 If dicStampName_ID.Count > 0 Then
-    For Each v In dicStampName_ID.keys()
-        dAll.Item(dicStampName_ID(v) & "_Name") = v
+    For Each v In dicStampName_ID.Keys()
+        dAll.item(dicStampName_ID(v) & "_Name") = v
     Next v
-    dAll.Item("TOTAL" & "_Name") = "TOTAL"
+    dAll.item("TOTAL" & "_Name") = "TOTAL"
 Else
-    dAll.Item("TOTAL_IDnr") = "TOTAL"
+    dAll.item("TOTAL_IDnr") = "TOTAL"
 End If
 
 'UDT's in VBA can't be stored in a collection/dictionary inside a class module,
@@ -285,16 +274,16 @@ End If
 'at report formatting. In current set up, these three things are done at the same place.
 
 cntAllTics = 0: sumAllTics = 0
-For Each key_idnr In dID_colTicDiffs.keys 'loop all identical IDnrs
+For Each key_idnr In dID_colTicDiffs.Keys 'loop all identical IDnrs
     
-    dAll.Item(key_idnr & "_IDnr") = key_idnr
+    dAll.item(key_idnr & "_IDnr") = key_idnr
     
     'overwrite names of the TrackID's this class uses.
     Select Case key_idnr
-        Case TrackID.id_start:          dAll.Item(TrackID.id_start & "_Name") = "(Start)"           'Initialisation
-        Case TrackID.id_pause:          dAll.Item(TrackID.id_pause & "_Name") = "(Before Pause)"    'Pause start
-        Case TrackID.id_continue:       dAll.Item(TrackID.id_continue & "_Name") = "(Continue)"     'After Pause/Paused
-        Case TrackID.id_resizingarray:  dAll.Item(TrackID.id_resizingarray & "_Name") = "(Resizing)" 'Resizing arStampID and arStamp
+        Case TrackID.id_start:          dAll.item(TrackID.id_start & "_Name") = "(Start)"           'Initialisation
+        Case TrackID.id_pause:          dAll.item(TrackID.id_pause & "_Name") = "(Before Pause)"    'Pause start
+        Case TrackID.id_continue:       dAll.item(TrackID.id_continue & "_Name") = "(Continue)"     'After Pause/Paused
+        Case TrackID.id_resizingarray:  dAll.item(TrackID.id_resizingarray & "_Name") = "(Resizing)" 'Resizing arStampID and arStamp
     End Select
     
     Set colTicDiffs = dID_colTicDiffs(key_idnr)
@@ -354,27 +343,27 @@ Next key_idnr
 v = OverheadPerTrackCall(v, "restore")
 
 'calculate percentage per ID, now that sumAllTics is known
-For Each key_idnr In dID_colTicDiffs.keys 'all identical IDnrs
+For Each key_idnr In dID_colTicDiffs.Keys 'all identical IDnrs
     v = key_idnr
-    dAll.Item(v & "_Percentage") = FormatPercent(dAll.Item(v & "_Sum of tics") / sumAllTics)
+    dAll.item(v & "_Percentage") = FormatPercent(dAll.item(v & "_Sum of tics") / sumAllTics)
 Next key_idnr
 
 'calculate totals
-dAll.Item("TOTAL" & "_Count") = FormatNumber(cntAllTics, 0)
-dAll.Item("TOTAL" & "_Sum of tics") = FormatNumber(sumAllTics, 0)
-dAll.Item("TOTAL" & "_Percentage") = FormatPercent(dAll.Item("TOTAL" & "_Sum of tics") / sumAllTics)
-dAll.Item("TOTAL" & "_Time sum") = secondsProperString(ticsToSeconds(sumAllTics), boForceMillis, boForceNanos)
+dAll.item("TOTAL" & "_Count") = FormatNumber(cntAllTics, 0)
+dAll.item("TOTAL" & "_Sum of tics") = FormatNumber(sumAllTics, 0)
+dAll.item("TOTAL" & "_Percentage") = FormatPercent(dAll.item("TOTAL" & "_Sum of tics") / sumAllTics)
+dAll.item("TOTAL" & "_Time sum") = secondsProperString(ticsToSeconds(sumAllTics), boForceMillis, boForceNanos)
 
 If boExtendedReport Then
-    dAll.Item("TOTAL" & "_Average") = Round(sumAllTics / cntAllTics, 0)
+    dAll.item("TOTAL" & "_Average") = Round(sumAllTics / cntAllTics, 0)
 End If
 
 'dAll now holds all the values for the report. key = IDnr_ValueType, value = value
 
 'add unique headers for output table
 dHeaders.Add "IDnr", 1 'makes sure IDnr is first/most left column
-For Each v In dAll.keys
-    dHeaders.Item(RIGHT_AfterLastCharsOf(v, "_")) = 0
+For Each v In dAll.Keys
+    dHeaders.item(RIGHT_AfterLastCharsOf(v, "_")) = 0
 Next v
 
 col = 0: row = 0 'column, row
@@ -392,13 +381,13 @@ For i = -1 To 256
     row = row + 1
     col = 0
     
-    For Each header In dHeaders.keys()
+    For Each header In dHeaders.Keys()
         col = col + 1
         If row = 1 Then
             arrReport(col, row) = header
         Else
             If dAll.Exists(strID & "_" & header) Then
-                arrReport(col, row) = dAll.Item(strID & "_" & header)
+                arrReport(col, row) = dAll.item(strID & "_" & header)
             End If
         End If
     Next header
@@ -413,9 +402,8 @@ theEnd:
 QueryPerformanceCounter stamp_ReportEnd
 Debug.Print "Total time since Start stamp:    " & secondsProperString(ticsToSeconds(stampsToTics_fromArrays(LBound(arrStamp) + 1, stampCount)))
 Debug.Print "Time to calculate report stamps: " & secondsProperString(ticsToSeconds(stampsToTics(stamp_ReportStart, stamp_ReportEnd)))
-Debug.Print "Max precision:             " & secondsProperString(Precision, True)
+Debug.Print "Max precision:                   " & secondsProperString(Precision, , True)
 Debug.Print ""
-
 
 End Sub
 
@@ -429,8 +417,8 @@ End Sub
 ' @secondsProperString
 ' @MaxAccuracy
 
-Private Function OverheadPerTrackCall(NameOrID As Variant, action As String) As Double
-'calculates the overhead in amount of tics to call methods TrackByID and TrackByName.
+Private Function OverheadPerTrackCall(NameOrID As Variant, Action As String) As Double
+'calculates the overhead in amount of tics to call methods TrackByTheID and TrackByName.
 'As these two methods adjust (values in) global variables, these global variables
 'are used to calculate the overhead. They are first copied and stored as Static, which
 'prevents the stamp-arrays from being copied every time an ID or Name is tested.
@@ -454,11 +442,11 @@ End If
 stampCount = 0
 
 Dim i As Long, id As Byte, name As String
-Select Case action
+Select Case Action
     Case "ByIDAvr", "ByIDMin"
         id = CByte(NameOrID)
         For i = frst_loop To last_loop
-            TrackByID id
+            TrackByTheID id
         Next i
         
     Case "ByNameAvr", "ByNameMin"
@@ -471,7 +459,7 @@ Select Case action
     
 End Select
 
-Select Case action
+Select Case Action
     Case "ByIDAvr", "ByNameAvr" 'average
         OverheadPerTrackCall = (arrStamp(last_loop) - arrStamp(frst_loop)) * fromCurr / last_loop
         Exit Function
@@ -506,7 +494,7 @@ End Function
 
 Private Function OverheadPerQPCcall() As Double
 'calculates (average) time it takes to call QPC function directly.
-'Does not include overhead of TrackByID or TrackByName (to look up IDnr from dictionary).
+'Does not include overhead of TrackByTheID or TrackByName (to look up IDnr from dictionary).
 
 Dim arr() As Currency: ReDim arr(1 To overheadTestCount)
 Dim i As Long
@@ -517,6 +505,8 @@ Next i
 OverheadPerQPCcall = (arr(UBound(arr)) - arr(LBound(arr))) * fromCurr / overheadTestCount
 End Function
 Private Function Precision() As Double
+'As described in microsoft docs https://docs.microsoft.com/en-us/windows/win32/sysinfo/acquiring-high-resolution-time-stamps#low-level-hardware-clock-characteristics
+
 'Tick Interval = 1/(Performance Frequency) = Resolution
 Dim resolution As Double
 resolution = 1 / freq
@@ -537,7 +527,7 @@ Private Function ticsToCollectionsInDictionaryPerID(ByRef arTdifs() As Currency,
 '    If dFilteredIDnrs.Exists(arrStampID(lb + offset)) Then GoTo next_item:
     
     On Error GoTo new_item
-    ticsToCollectionsInDictionaryPerID.Item(LTrim$(str$(arrStampID(lb + offset)))).Add arTdifs(lb + offset)
+    ticsToCollectionsInDictionaryPerID.item(LTrim$(str$(arrStampID(lb + offset)))).Add arTdifs(lb + offset)
     On Error GoTo 0
 'next_item:
   Next
@@ -545,7 +535,7 @@ Private Function ticsToCollectionsInDictionaryPerID(ByRef arTdifs() As Currency,
   Exit Function
   
 new_item:
-  Set ticsToCollectionsInDictionaryPerID.Item(LTrim$(str$(arrStampID(lb + offset)))) = New Collection
+  Set ticsToCollectionsInDictionaryPerID.item(LTrim$(str$(arrStampID(lb + offset)))) = New Collection
   Resume
 End Function
 
@@ -654,7 +644,7 @@ Private Function Max(ByVal x As Double, ByVal y As Double) As Double
 End Function
 
 Private Function MedianOfFirst_x_Elements(col As Collection, x As Long) As Double 'MedianFromCollection
-'puts specified amount of values of collection into an array, quicksorts
+'puts specified amount (x) of values of collection into an array, quicksorts
 'the array and then takes out the Median value.
     Dim c  As Long: c = IIf(x > col.Count, col.Count, x) 'sorting large collection is time consuming so take minimum
     Dim ar() As Variant
