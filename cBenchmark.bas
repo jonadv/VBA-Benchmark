@@ -366,11 +366,11 @@ Next key_idnr
 'calculate totals
 dAll.item("TOTAL" & "_Count") = FormatNumber(cntAllTics, 0)
 dAll.item("TOTAL" & "_Sum of tics") = FormatNumber(sumAllTics, 0)
-dAll.item("TOTAL" & "_Percentage") = FormatPercent(dAll.item("TOTAL" & "_Sum of tics") / sumAllTics)
+If sumAllTics > 0 Then dAll.item("TOTAL" & "_Percentage") = FormatPercent(dAll.item("TOTAL" & "_Sum of tics") / sumAllTics)
 dAll.item("TOTAL" & "_Time sum") = secondsProperString(ticsToSeconds(sumAllTics), boForceMillis, boForceNanos)
 
 If boExtendedReport Then
-    dAll.item("TOTAL" & "_Average") = Round(sumAllTics / cntAllTics, 0)
+    If cntAllTics > 0 Then dAll.item("TOTAL" & "_Average") = Round(sumAllTics / cntAllTics, 0)
 End If
 
 'dAll now holds all the values for the report. key = IDnr_ValueType, value = value
@@ -778,3 +778,6 @@ For r = LBound(arTemp, 1) To UBound(arTemp, 1)
 Next r
 Transpose2DArray = arTemp
 End Function
+
+
+
