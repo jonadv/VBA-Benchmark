@@ -16,7 +16,7 @@ How to use
 
 Example:
 
-`
+```
 Sub testCBenchmark()
     Dim bm As New cBenchmark
     Dim i As Long
@@ -36,7 +36,7 @@ bm.TrackByName "Slept"
     Application.Wait Now + TimeValue("0:00:01")
 bm.TrackByName "Waited"
 End Sub
-`
+```
 
 Will print: 
 `
