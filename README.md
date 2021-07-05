@@ -6,14 +6,26 @@
 A one-class module to conveniently time your code. Reports automatically. 
 Includes a convinience method to use instead of Application.Wait. 
 
+**Advantages**
+- Accuracy to nanoseconds
+- No delay of console logging/using Debug.Print
+- Convenient to use
+- Identify parts of code
+- Re-use same name for pieces of code all over the place
+- Time code spread over several modules
+- Up to 256 different tracks
+
 **How to use**
 
 - Copy paste all code into a class module named cBenchmark
-- Create an instance of it at the start of your own code (fe `Dim bm As New cBenchmark`) 
+- Create an instance of it at the start of your own code (fe `Dim bm As New cBenchmark`)
+- Or declare class instance as global to time multi-module code (write `Set bm = New cBenchmark` at start of code)
 - Write `bm.TrackByName "Description of codepart"` in between all of your code 
 - Open Immediate window and run you're code
-- When you're code finishes, the report is printed automatically (or write `Set bm = Nothing` to make sure)
-- the report will show each identically used name and time it took
+- When you're code finishes, the report is printed automatically 
+- Or, when instance is declared global, write `Set bm = Nothing` before last `End Sub`
+- The report will show each identically used name, the time it took and the time percentage of each track
+
 
 **Example:**
 
@@ -57,7 +69,39 @@ Total time recorded:             373 ms
 Everytime `TrackByName` is called a 'CPU-timestamp' is stored. After you're code finishes, stamps are grouped and the time running (per uniquely given name) is calculated. 
 
 
-**Notes**
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+_**dev notes**
 
 - This should be the fastest and most accurate possible way to time VBA code, as in, with as little overhead as possible.
 - When the code is running, the only thing this class does is storing the timestamps. Any processing is delayed untill after code finished running.
@@ -66,3 +110,4 @@ Everytime `TrackByName` is called a 'CPU-timestamp' is stored. After you're code
 
 
 
+_
