@@ -15,7 +15,9 @@ How to use
 - the report will show each identically used name and time it took
 
 Example:
-`Sub testCBenchmark()
+
+`
+Sub testCBenchmark()
     Dim bm As New cBenchmark
     Dim i As Long
 bm.TrackByName "Initialisations"
@@ -33,7 +35,8 @@ bm.TrackByName "Slept"
 
     Application.Wait Now + TimeValue("0:00:01")
 bm.TrackByName "Waited"
-End Sub`
+End Sub
+`
 
 Will print: 
 `
