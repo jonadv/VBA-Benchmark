@@ -1,15 +1,15 @@
 ''
 ' VBA-Benchmark v0.1
-' (c) Jonathan de Vries - https://github.com/jonadv/VBA-Benchmark/
+' Jonathan de Vries - https://github.com/jonadv/VBA-Benchmark/
 '
 ' Benchmark VBA Code
 
 Option Explicit
 
-#If VBA7 Then
+#If VBA7 Then   '64 bit
     Private Declare PtrSafe Function QueryPerformanceCounter Lib "kernel32" (stamp As Currency) As Byte
     Private Declare PtrSafe Function QueryPerformanceFrequency Lib "kernel32" (freq As Currency) As Byte
-#Else
+#Else           '32 bit
     Private Declare Function QueryPerformanceCounter Lib "kernel32" (stamp As Currency) As Byte
     Private Declare Function QueryPerformanceFrequency Lib "kernel32" (freq As Currency) As Byte
 #End If
@@ -54,10 +54,8 @@ Private Enum TrackID
     id_resizingarray = 252
 End Enum
 
-'include CTimer.Pause (stores timestamp) and .Continue (should give error when previous call wasnt a pause. Might need track ID as argument?).
 'include setting time unit of output (nanos, millis, seconds, etc). calcualte default at end by total time passed
 'include report to have cycle counts as well as mean, median and std
-'include accurate Wait function (https://web.archive.org/web/20160324085802/http://vba.tips/2015/05/precision-time-delay/)
 
 ' ============================================= '
 ' Class specific Functions
@@ -73,27 +71,42 @@ Private Sub Class_Initialize()
 End Sub
 Private Sub Class_Terminate()
     Report                                          'print report with default settings when code is finished (to debug immediate window)
-'    Reset
-'    time_start = 0
 End Sub
 
 ' ============================================= '
 ' Public Functions
 ' ============================================= '
-' @TrackByTheID     - Store QPC (cycle counts) in an array
 ' @TrackByName      - Same as @TrackByTheID but more convenient (and thus with a bit more overhead)
+' @TrackByTheID     - Store QPC (cycle counts) in an array
 ' @Start            - (Start) or (Reset and Restart) benchmark
 ' @Pause            - Convenience method to exclude pieces of code, use in combination with .Continue
 ' @Continue         - Use after calling .Pause to continue tracking
-' @Report           - Generate report with default settings
-' ReportCustom      - Generate report with specified settings
+' @Report           - Generate report
 
+Public Sub TrackByName(ByVal strTrackName As String)
+    'intermediate/more convenient way to call track method
+    'if TrackByTheID and TrackByName are used mixed, some tracks might write to the same ID
+    'reference type ByVal can save a few clock cycles https://stackoverflow.com/questions/408101/which-is-faster-byval-or-byref
+    
+    'when count = 0, it adds an IDnr of 0, count = 1 adds IDnr 1, etc
+    If Not dicStampName_ID.Exists(strTrackName) Then dicStampName_ID.Add strTrackName, CByte(dicStampName_ID.Count)
+    
+    'gets IDnr and passes it as argument when calling TrackByTheID
+    TrackByTheID dicStampName_ID(strTrackName)
+
+End Sub
 Public Sub TrackByTheID(ByVal IDnr As Byte)
+    'if it runs into an error here, you probably tried to pass a string data type
+    
     'the fastest possible way (as in with least amount of overhead) to store
-    'cpu stamps of QPC function is to store them in an array
+    'cpu stamps of QPC function is to store them in an array as datatype Currency (or as LongLong)
+    'Storing the stamps as a UDT (fe LARGE_INTEGER.lowpart and .highpart) can take twice the time,
+    'as basically two 'seperate' primary datavalues have to be stored. Surprisingly there is no difference
+    'in time at all in using either LongLong or Currency, however, datatype LongLong is not availabe
+    'on 32-bit machines.
     
     'sub was called TrackByID before, but then intellisense shows it as first option/above TrackByName
-    'when only typing 'tra'. This way typing 'tra' + tab should be enough.
+    'when only typing 'tr'. This way typing 'tr' + tab should be enough.
     
     stampCount = stampCount + 1
     
@@ -115,18 +128,6 @@ Public Sub TrackByTheID(ByVal IDnr As Byte)
         TrackByTheID TrackID.id_resizingarray
     End If
 End Sub
-Public Sub TrackByName(ByVal strTrackName As String)
-    'intermediate/more convenient way to call track method
-    'if TrackByTheID and TrackByName are used mixed, some tracks might write to the same ID
-    'reference type ByVal can save a few clock cycles https://stackoverflow.com/questions/408101/which-is-faster-byval-or-byref
-    
-    'when count = 0, it adds an IDnr of 0, count = 1 adds IDnr 1, etc
-    If Not dicStampName_ID.Exists(strTrackName) Then dicStampName_ID.Add strTrackName, CByte(dicStampName_ID.Count)
-    
-    'gets IDnr and passes it as argument when calling TrackByTheID
-    TrackByTheID dicStampName_ID(strTrackName)
-
-End Sub
 
 Public Sub Start()
     Reset 're-initialize all
@@ -142,19 +143,30 @@ Public Sub Continue()
 'Is only included in output of report if boExtendedReport is set to True
     TrackByTheID TrackID.id_continue
 End Sub
-Public Sub Report()
-'Calculate and output report with default settings.
+Public Sub Report(Optional ByVal boExtendedReport As Boolean = False, _
+                    Optional ByVal boTransposeReport As Boolean = False, _
+                    Optional ByVal OutputToRange As Range = Nothing, _
+                    Optional ByVal boCorrectOverhead As Boolean = False, _
+                    Optional ByVal boForceMillis As Boolean = False)
+'Public method of report function. Calculates and outputs report with default settings to debug window (ctrl + G to show).
 'Can be called from Immediate window or in break mode/while running code
-    ReportArg 'no arguments is default settings
+    ReportArg boExtendedReport, boTransposeReport, OutputToRange, boCorrectOverhead, boForceMillis
 End Sub
 
-Public Sub ReportCustom(Optional ByVal boExtendedReport As Boolean = False, _
-                        Optional ByVal boTransposeReport As Boolean = False, _
-                        Optional ByVal OutputToRange As Range = Nothing, _
-                        Optional ByVal boCorrectOverhead As Boolean = False, _
-                        Optional ByVal boForceMillis As Boolean = False)
-                        
-    ReportArg boExtendedReport, boTransposeReport, OutputToRange, boCorrectOverhead, boForceMillis
+Public Sub Sleep(seconds As Double, Optional boDoEventsWhileSleeping As Boolean = True)
+'Same as Application.Wait function, but more accurate and easier to use.
+'a.Sleep 2      <- VS ->     Application.Wait Now + TimeValue("0:00:02")
+'set the boolean to false for more accuracy
+Dim startstamp As Currency, restamp As Currency
+QueryPerformanceCounter startstamp
+Do While ticsToSeconds(stampsToTics(startstamp, restamp)) <= seconds
+    If boDoEventsWhileSleeping Then DoEvents
+    QueryPerformanceCounter restamp
+Loop
+End Sub
+Public Sub Wait(seconds As Double, Optional boDoEventsWhileWaiting As Boolean = True)
+'For when you're used to methodname Wait
+    Sleep seconds, boDoEventsWhileWaiting
 End Sub
 
 ' ============================================= '
@@ -165,7 +177,7 @@ End Sub
 ' @ReportArg
 Private Sub Reset()
 'Sub is private as public method .Start does the same
-    QueryPerformanceFrequency freq      'Make sure frequency is set right (in cace instance of this class is declared public static)
+    QueryPerformanceFrequency freq      'Make sure frequency is set right (in case an instance of this class is declared public static)
     freq = freq * fromCurr
     stampCount = 0
     currentArraySizes = 0
@@ -208,7 +220,7 @@ If stampCount < 2 Then GoTo theEnd
 
 'Start report with dimensions
 Dim i As Long                           'index number at various places
-Dim v As Variant
+Dim v As Variant                        'used in various loops over dictionary/collections
 
 Dim arTicDiffs() As Currency            'array to hold the differences between two stamps, same sized array as arrStamp and arrStampID
 Dim dID_colTicDiffs As New Dictionary   'key = IDnr, value = collection of time recordings (tics) per IDnr
@@ -250,7 +262,7 @@ If Not boExtendedReport Then
     If dID_colTicDiffs.Exists(TrackID.id_pause & "") Then dID_colTicDiffs.Remove TrackID.id_pause & ""
     If dID_colTicDiffs.Exists(TrackID.id_resizingarray & "") Then dID_colTicDiffs.Remove TrackID.id_resizingarray & ""
 End If
-'example of filtering your own defined tracks:
+'example of filtering your own defined tracks, both steps required:
 'dID_colTicDiffs.Remove dicStampName_ID("Initialisation")
 'dicStampName_ID.Remove "Initialisation"
 
@@ -265,13 +277,17 @@ Else
     dAll.item("TOTAL_IDnr") = "TOTAL"
 End If
 
-'UDT's in VBA can't be stored in a collection/dictionary inside a class module,
+'UDT's in VBA can't be stored in a collection/dictionary inside a class module.
 'Instead output values are stored in a dictionary with the key being the "id" concatenated with the "_Valuetype".
-'After this the "Valuetype" becomes the header-name of the output table.
+'After this the "_Valuetype" becomes the header-name of the output table.
 'This way the output only has to be added/adjusted at one place, instead of at calculation ánd report-output functions.
-'Another option would be ADO Recordset, but that would require an additional Tools reference. Or just an array
-'of UDT's, but that would require adjustments on 3 places: at top of the class, at calculation and
-'at report formatting. In current set up, these three things are done at the same place.
+'Other options, like ADO recordset or an array of UDT's, would require to adjust the reportcode in 3 places:
+'at decleration of the UDT, at calculation (sum, count, etc) and at report formatting/creating the table.
+'In current set up, these three things are done at the same place.
+
+' -------------------------------------------------------------------------
+' ----------------------- Start calculating report ------------------------
+' -------------------------------------------------------------------------
 
 cntAllTics = 0: sumAllTics = 0
 For Each key_idnr In dID_colTicDiffs.Keys 'loop all identical IDnrs
@@ -289,8 +305,7 @@ For Each key_idnr In dID_colTicDiffs.Keys 'loop all identical IDnrs
     Set colTicDiffs = dID_colTicDiffs(key_idnr)
     cntTic = 0: minTic = 1E+15: maxTic = 0: sumTics = 0: avrTics = 0
     'break here to see the cpu tic-differences in between TrackBy calls
-    For Each col_item In colTicDiffs
-        'col_item = ammount of tics
+    For Each col_item In colTicDiffs 'col_item = collection of (ammount of) tics
         cntTic = cntTic + 1
         minTic = Min(minTic, col_item)
         maxTic = Max(maxTic, col_item)
@@ -360,6 +375,10 @@ End If
 
 'dAll now holds all the values for the report. key = IDnr_ValueType, value = value
 
+' -------------------------------------------------------------------------
+' ---------------------- End of calculating report ------------------------
+' -------------------------------------------------------------------------
+
 'add unique headers for output table
 dHeaders.Add "IDnr", 1 'makes sure IDnr is first/most left column
 For Each v In dAll.Keys
@@ -400,9 +419,9 @@ Array2DToImmediate (arrReport)
 
 theEnd:
 QueryPerformanceCounter stamp_ReportEnd
-Debug.Print "Total time since Start stamp:    " & secondsProperString(ticsToSeconds(stampsToTics_fromArrays(LBound(arrStamp) + 1, stampCount)))
-Debug.Print "Time to calculate report stamps: " & secondsProperString(ticsToSeconds(stampsToTics(stamp_ReportStart, stamp_ReportEnd)))
-Debug.Print "Max precision:                   " & secondsProperString(Precision, , True)
+Debug.Print "Total time recorded:             " & secondsProperString(ticsToSeconds(stampsToTics_fromArrays(LBound(arrStamp), stampCount)))
+If boExtendedReport Then Debug.Print "Time to calculate report stamps: " & secondsProperString(ticsToSeconds(stampsToTics(stamp_ReportStart, stamp_ReportEnd)))
+If boExtendedReport Then Debug.Print "Max precision:                   " & secondsProperString(Precision, , True)
 Debug.Print ""
 
 End Sub
@@ -494,7 +513,9 @@ End Function
 
 Private Function OverheadPerQPCcall() As Double
 'calculates (average) time it takes to call QPC function directly.
-'Does not include overhead of TrackByTheID or TrackByName (to look up IDnr from dictionary).
+'Does not include overhead of TrackByTheID (calling the function
+'itself and the if-block within) or TrackByName (the time it takes
+'to look up the IDnr from dictionary).
 
 Dim arr() As Currency: ReDim arr(1 To overheadTestCount)
 Dim i As Long
@@ -524,12 +545,9 @@ Private Function ticsToCollectionsInDictionaryPerID(ByRef arTdifs() As Currency,
   
   Dim offset As Long
   For offset = 0 To stampCount - 1
-'    If dFilteredIDnrs.Exists(arrStampID(lb + offset)) Then GoTo next_item:
-    
     On Error GoTo new_item
     ticsToCollectionsInDictionaryPerID.item(LTrim$(str$(arrStampID(lb + offset)))).Add arTdifs(lb + offset)
     On Error GoTo 0
-'next_item:
   Next
   
   Exit Function
@@ -551,21 +569,21 @@ End Function
 Private Function stampsToTics(ByVal stampBefore As Currency, ByVal stampAfter As Currency) As Currency
 'Calculates the difference in between to QPC stamps and upscales them from Currency to whole numbers
 
-'example returns of QPC
-'- as Currency -> 304462680,3775    --> needs upscaling by 10.000
+'example returns of QPC:
+'- as Currency -> 304462680,3775    --> needs upscaling by 10 000
 '- as LongLong -> 3044626803775
 
-'example returns of QPF (is system specific, but commonly 10Mhz on Windows 10):
-'With a usual QPF on windows 10 (10MHz):
-'- as Currency ->     1000  =      1.000
-'- as LongLong -> 10000000  = 10.000.000
+'example returns of QPF (is system specific, but commonly 10Mhz on Windows 10)
+'with a usual QPF on windows 10 (10MHz):
+'- as Currency ->     1000  =      1 000
+'- as LongLong -> 10000000  = 10 000 000
 
 stampsToTics = (stampAfter - stampBefore) * fromCurr
 End Function
 Private Function ticsToSeconds(ByVal tics As Currency) As Double
     If Int(tics) <> tics Or Int(freq) <> freq Then err.Raise 9999999, , "QPC or QPF returns with datatype As Currency downscales the returns with 10 000. Upscale both returns before calling this funciton."
     'Int(freq) is actually not a proper check to see if it has been upscaled, as it is often also a round number when downscaled (10mhz)
-    ticsToSeconds = tics / freq 'time in seconds
+    ticsToSeconds = tics / freq 'time in (full) seconds
 End Function
 Private Function secondsProperString(ByVal t As Double, _
                 Optional ByVal boForceMilliSeconds As Boolean = False, _
@@ -580,25 +598,25 @@ If t >= 3599 And Not boForceMilliSeconds And Not boForceNanoSeconds Then    'mor
 ElseIf t > 599 And Not boForceNanoSeconds And Not boForceMilliSeconds Then  'more then 10 minutes
     res = VBA.Format$(t / 3600 / 24, "mm:ss")
     
-ElseIf t > 120 And Not boForceNanoSeconds And Not boForceMilliSeconds Then  '2 minutes
+ElseIf t > 120 And Not boForceNanoSeconds And Not boForceMilliSeconds Then  '>2 minutes
     res = Round(t, 1) & " s"
     
-ElseIf t > 10 And Not boForceNanoSeconds And Not boForceMilliSeconds Then   '10 seconds
+ElseIf t > 10 And Not boForceNanoSeconds And Not boForceMilliSeconds Then   '>10 seconds
     res = Round(t, 1) & " s"
     
-ElseIf t > 0.9 And Not boForceNanoSeconds And Not boForceMilliSeconds Then  '0.9 second
+ElseIf t > 0.9 And Not boForceNanoSeconds And Not boForceMilliSeconds Then  '>0.9 second
     res = Round(t, 2) & " s"
     
-ElseIf t > (10 / 1000#) And Not boForceNanoSeconds Or boForceMilliSeconds Then   'millisecond (1 ms = 10-E3 s)
+ElseIf t > (10 / 1000#) And Not boForceNanoSeconds Or boForceMilliSeconds Then  'millisecond (1 ms = 10-E3 s)
     res = Round(t * 1000#, IIf(boForceMilliSeconds, 2, 0)) & " ms"
     
-ElseIf t > (1 / 1000#) And Not boForceNanoSeconds Then                         'millisecond (1 ms = 10-E3 s)
+ElseIf t > (1 / 1000#) And Not boForceNanoSeconds Then                          'millisecond (1 ms = 10-E3 s)
     res = Round(t * 1000#, 2) & " ms"
     
-ElseIf t > (10 / 1000000#) And Not boForceNanoSeconds Then                       'microsecond (1 us = 10-E6 s)
+ElseIf t > (10 / 1000000#) And Not boForceNanoSeconds Then                      'microsecond (1 us = 10-E6 s)
     res = Round(t * 1000000#) & " us"
     
-ElseIf t > (10 / 1000000000#) Or boForceNanoSeconds Then                         'nanosecond (1 ns = 10-E9 s)
+ElseIf t > (10 / 1000000000#) Or boForceNanoSeconds Then                        'nanosecond (1 ns = 10-E9 s)
     res = Round(t * 1000000000#) & " ns"
 
 'Any value below this is probably below the maximum preciscion of the QPC function (and likely cause of overhead correction).
@@ -760,6 +778,3 @@ For r = LBound(arTemp, 1) To UBound(arTemp, 1)
 Next r
 Transpose2DArray = arTemp
 End Function
-
-
-
