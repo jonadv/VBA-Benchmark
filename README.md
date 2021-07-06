@@ -70,24 +70,24 @@ Everytime `TrackByName` is called a 'CPU-timestamp' is stored. After you're code
 
 
 **Public functions overview**
- | Type | Method Name | Description |
+ | Category | Method Name | Description |
  | ----- | ----------- | ----------- |
- | Public | TrackByName | Same as @TrackByTheID but more convenient (and thus with a bit more overhead) | 	
- | Public | TrackByTheID | Store QPC (cycle counts) in an array | 	
- | Public | Start | (Start) or (Reset and Restart) benchmark | 	
- | Public | Pause | Convenience method to exclude pieces of code, use in combination with .Continue | 	
- | Public | Continue | Use after calling .Pause to continue tracking | 	
- | Public | Report | Generate report | 	
- | Public | Sleep | timeout code, alternative for Application.Wait | 	
- | Public | Wait | same as method Sleep | 	
+ | Main | TrackByName | Same as @TrackByTheID but more convenient (and thus with a bit more overhead) | 	
+ | Main | TrackByTheID | Store QPC (cycle counts) in an array | 	
+ | Main | Start | (Start) or (Reset and Restart) benchmark | 	
+ | Main | Pause | Convenience method to exclude pieces of code, use in combination with .Continue | 	
+ | Main | Continue | Use after calling .Pause to continue tracking | 	
+ | Main | Report | Generate report | 	
+ | Main | Sleep | timeout code, alternative for Application.Wait | 	
+ | Main | Wait | same as method Sleep | 	
  
  
  
 **Private functions overview**
- | Scope | Method Name | Description |
+ | Category | Method Name | Description |
  | ----- | ----------- | ----------- | 
- | Class_Initialize | initialise varialbes and set first stamp | 	
- | Class_Terminate | calculates and writes report to debug | 	
+ | Class | Class_Initialize | initialise varialbes and set first stamp | 	
+ | Class | Class_Terminate | calculates and writes report to debug | 	
  | Bench helpers | Reset | reset/re-initialise all variables | 
  | Bench helpers | RedimStampArrays | enlarge stamp arrays | 
  | Bench helpers | ReportArg | calculate and write report | 
