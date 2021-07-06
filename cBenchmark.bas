@@ -23,12 +23,14 @@ Option Explicit
 'finished so it will not effect the benchmark results.
 
 'used definitions:
-'QPC            QueryPerformanceCounter
-'stamp          returnvalue from QPC, which is an accurate 'time'-stamp since computer has been boot
+'QPC            QueryPerformanceCounter, reads the TSC and translates it to a timeunit
+'stamp          returnvalue from QPC, which is an accurate time-stamp since computer has been boot
 'QPF            QueryPerformanceFrequency
 'frequency      the amount of QPC-cycles per second, nowadays usually 10MHz on Windows 10 but can differ per machine
 'tic            difference between two QPC time stamps
-'RDTSC          Read Time Stamp Counter, an even more accurate way to benchmark code, but for VBA it would require a custommade .dll
+'cpu-cycle      a single increment of the CPU clock during which the smallest unit of processor activity is carried out.
+'qpc-cycle      non-exisiting term that just shows how confusing clock cycles are.
+'RDTSC          Read Time Stamp Counter, an even more accurate way to benchmark code, but for VBA it would require a custom made .dll
 
 Private freq As Currency                    'frequency is the amount tics per second
 Private stampCount As Long                  'to keep track of postition of next stamp and stampID in arrays
@@ -47,7 +49,7 @@ Private Enum TrackID
     id_resizingarray = 252
 End Enum
 
-'include setting time unit of output (nanos, millis, seconds, etc). calcualte default at end by total time passed
+'TODO: include setting time unit of output (nanos, millis, seconds, etc). calcualte default at end by total time passed
 
 ' ============================================= '
 ' Class specific Functions
@@ -635,8 +637,8 @@ ElseIf t > (10 / 1000000000#) Or boForceNanoSeconds Then                        
 ElseIf t > (10 / 1000000000000#) Then res = Round(t * 1000000000000#) & " ps"   'picosecond (1 ps = 10-E12 s)
 ElseIf t > (10 / 1E+15) Then res = Round(t * 1E+15) & " fs"                     'femtosecond (1 fs = 10-E15 s)
 ElseIf t > (10 / 1E+18) Then res = Round(t * 1E+18) & " as"                     'attosecond (1 as = 10-E18 s)
-ElseIf t > (10 / 1E+21) Then res = Round(t * 1E+21) & " zs"                     'zeptosecond (1 as = 10-E21 s) -> shortest time ever measured was 247 zeptoseconds :)
-ElseIf t > (10 / 1E+24) Then res = Round(t * 1E+24) & " ys"                     'yoctosecond (1 as = 10-E24 s)
+ElseIf t > (10 / 1E+21) Then res = Round(t * 1E+21) & " zs"                     'zeptosecond (1 zs = 10-E21 s) -> shortest time ever measured was 247 zeptoseconds :)
+ElseIf t > (10 / 1E+24) Then res = Round(t * 1E+24) & " ys"                     'yoctosecond (1 ys = 10-E24 s)
 '"For Decimal expressions, any fractional value less than 1E-28 might be lost." (.net docs)
 
 ElseIf t < 0 Then
