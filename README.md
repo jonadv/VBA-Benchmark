@@ -3,7 +3,7 @@
 
 [![release](https://img.shields.io/github/release/jonadv/VBA-Benchmark.svg?style=flat&logo=github)](https://github.com/jonadv/VBA-Benchmark/releases/latest) [![last-commit](https://img.shields.io/github/last-commit/jonadv/VBA-Benchmark.svg?style=flat)](https://github.com/jonadv/VBA-Benchmark/commits/master) [![downloads](https://img.shields.io/github/downloads/jonadv/VBA-Benchmark/total.svg?style=flat)](https://somsubhra.com/github-release-stats/?username=jonadv&repository=VBA-Benchmark) [![code-size](https://img.shields.io/github/languages/code-size/jonadv/VBA-Benchmark.svg?style=flat)](https://github.com/jonadv/VBA-Benchmark) [![language](https://img.shields.io/github/languages/top/jonadv/VBA-Benchmark.svg?style=flat)](https://github.com/jonadv/VBA-Benchmark/search?l=vba) [![license](https://img.shields.io/github/license/jonadv/VBA-Benchmark.svg?style=flat)](https://github.com/jonadv/VBA-Benchmark/blob/master/LICENSE) [![gitter](https://img.shields.io/gitter/room/jonadv/VBA-Benchmark.svg?style=flat&logo=gitter)](https://gitter.im/jonadv)
 
-A one-class module to conveniently time your code. Reports automatically. 
+A one-class module to conveniently profile your code. Reports automatically. 
 Includes a convinience method to use instead of Application.Wait. 
 
 **Advantages**
