@@ -12,7 +12,7 @@ Includes a convinience method to use instead of Application.Wait.
 - Convenient to use
 - Identify parts of code
 - Re-use same name for pieces of code all over the place
-- Time code spread over several modules
+- Profile code which is spread out over multiple functions or modules
 - Up to 256 different tracks
 
 **How to use**
@@ -109,12 +109,12 @@ Everytime `TrackByName` is called a 'CPU-timestamp' is stored. After you're code
 
 
 
-_**dev notes**
+_**notes**
 
 - This should be the fastest and most accurate possible way to time VBA code, as in, with as little overhead as possible.
 - When the code is running, the only thing this class does is storing the timestamps. Any processing is delayed untill after code finished running.
 - The only better method then using the QueryPerformanceCounter would be to read the TSC directly with RDTSC, which requires a custom made .dll - and a bit more complexity.
-- Using a UDT instead of Currency or LongLong as a datatype of the QPC function might be faster then returning a LongLong or Currency, but storing/handling that returnvalue in VBA is far from faster then just a LongLong or Currency value. This mmight be because VBA needs to store two seperate values (lowpart and highpart), instead of just a big one. As LongLong is only available on 64-bit systems and there seemed to be no differnce in speeds whatsoever (between these two datatypes), Currency is the best option.
+- Using a UDT instead of Currency or LongLong as a datatype of the QPC function might be faster then returning a LongLong or Currency, but storing/handling that returnvalue in VBA is far from faster then just a LongLong or Currency value. Probably because VBA needs to store two seperate values (lowpart and highpart), instead of just a big one. As LongLong is only available on 64-bit systems and there seemed to be no differnce in speeds whatsoever (between these two datatypes), Currency is the best option.
 
 
 
