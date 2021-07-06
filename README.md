@@ -72,7 +72,6 @@ Everytime `TrackByName` is called a 'CPU-timestamp' is stored. After you're code
 **Public functions overview**
  | Scope | Method Name | Description |
  | ----- | ----------- | ----------- |
-
  | Public | TrackByName | Same as @TrackByTheID but more convenient (and thus with a bit more overhead) | 	
  | Public | TrackByTheID | Store QPC (cycle counts) in an array | 	
  | Public | Start | (Start) or (Reset and Restart) benchmark | 	
@@ -82,9 +81,11 @@ Everytime `TrackByName` is called a 'CPU-timestamp' is stored. After you're code
  | Public | Sleep | timeout code, alternative for Application.Wait | 	
  | Public | Wait | same as method Sleep | 	
  
+ 
+ 
 **Private functions overview**
- | Scope | Method Name | Description | Return value |
- | ----- | ----------- | ----------- | ------------ |
+ | Scope | Method Name | Description |
+ | ----- | ----------- | ----------- | 
  | Class_Initialize | initialise varialbes and set first stamp | 	
  | Class_Terminate | calculates and writes report to debug | 	
  | Bench helpers | Reset | reset/re-initialise all variables | 
@@ -105,17 +106,6 @@ Everytime `TrackByName` is called a 'CPU-timestamp' is stored. After you're code
  | General Report Helpers | RIGHT_AfterLastCharsOf | last part of string | 
  | General Report Helpers | Array2DToImmediate | print array to console | 
  | General Report Helpers | Transpose2DArray | flip 2D-array 90 degrees | 
- 
-![image](https://user-images.githubusercontent.com/10421216/124675037-27548300-debc-11eb-8c59-cc546829a01d.png)
-
-
- 
-![image](https://user-images.githubusercontent.com/10421216/124674544-3dae0f00-debb-11eb-8261-cbec18b6963c.png)
-
-
-
-
-
 
 
 
