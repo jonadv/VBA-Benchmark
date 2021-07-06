@@ -69,37 +69,47 @@ Total time recorded:             373 ms
 Everytime `TrackByName` is called a 'CPU-timestamp' is stored. After you're code finishes, stamps are grouped and written to a report. 
 
 
-**Function overview**
+**Public functions overview**
+ | Scope | Method Name | Description |
+ | ----- | ----------- | ----------- |
+
+ | Public | TrackByName | Same as @TrackByTheID but more convenient (and thus with a bit more overhead) | 	
+ | Public | TrackByTheID | Store QPC (cycle counts) in an array | 	
+ | Public | Start | (Start) or (Reset and Restart) benchmark | 	
+ | Public | Pause | Convenience method to exclude pieces of code, use in combination with .Continue | 	
+ | Public | Continue | Use after calling .Pause to continue tracking | 	
+ | Public | Report | Generate report | 	
+ | Public | Sleep | timeout code, alternative for Application.Wait | 	
+ | Public | Wait | same as method Sleep | 	
+ 
+**Private functions overview**
  | Scope | Method Name | Description | Return value |
  | ----- | ----------- | ----------- | ------------ |
- | Class specific Functions | Class_Initialize | initialise varialbes and set first stamp | 	
- | Class specific Functions | Class_Terminate | calculates and writes report to debug | 	
- | Public Functions | TrackByName | Same as @TrackByTheID but more convenient (and thus with a bit more overhead) | 	
- | Public Functions | TrackByTheID | Store QPC (cycle counts) in an array | 	
- | Public Functions | Start | (Start) or (Reset and Restart) benchmark | 	
- | Public Functions | Pause | Convenience method to exclude pieces of code, use in combination with .Continue | 	
- | Public Functions | Continue | Use after calling .Pause to continue tracking | 	
- | Public Functions | Report | Generate report | 	
- | Public Functions | Sleep | timeout code, alternative for Application.Wait | 	
- | Public Functions | Wait | same as method Sleep | 	
- | Private Functions - Specific bench helpers | Reset | reset/re-initialise all variables | 	
- | Private Functions - Specific bench helpers | RedimStampArrays | enlarge stamp arrays | 	
- | Private Functions - Specific bench helpers | ReportArg | calculate and write report | 	
- | Private Functions - Specific Report Helpers | OverheadPerTrackCall | overhead of QPC including TrackBy-methods | 	
- | Private Functions - Specific Report Helpers | OverheadPerQPCcall | overhead of only the QPC function | 	
- | Private Functions - Specific Report Helpers | Precision | returns maximum precision of this class in seconds | 	
- | Private Functions - Specific Report Helpers | ticsToCollectionsInDictionaryPerID | group stamps from global stamparray into seperate (per tracked ID) collections | 	
- | Private Functions - Specific Report Helpers | stampsToTics_fromArrays | retrieve tics from arrays and return difference | 	
- | Private Functions - Specific Report Helpers | stampsToTics | returns difference between to stamps | 	
- | Private Functions - Specific Report Helpers | ticsToSeconds | convert qpc-tics to seconds | 	
- | Private Functions - Specific Report Helpers | secondsProperString | convert seconds to appropriate readable text | 	
- | Private Functions - General Report Helpers | Min | minimum of two double-values | 	
- | Private Functions - General Report Helpers | Max | maximum of two double-values | 	
- | Private Functions - General Report Helpers | MedianOfFirst_x_Elements | median of a part of a collection | 	
- | Private Functions - General Report Helpers | QuickSortArray | quick sort an array | 	
- | Private Functions - General Report Helpers | RIGHT_AfterLastCharsOf | last part of string | 	
- | Private Functions - General Report Helpers | Array2DToImmediate | print array to console | 	
- | Private Functions - General Report Helpers | Transpose2DArray | flip 2D-array 90 degrees | 	
+ | Class_Initialize | initialise varialbes and set first stamp | 	
+ | Class_Terminate | calculates and writes report to debug | 	
+ | Bench helpers | Reset | reset/re-initialise all variables | 
+ | Bench helpers | RedimStampArrays | enlarge stamp arrays | 
+ | Bench helpers | ReportArg | calculate and write report | 
+ | Specific Report Helpers | OverheadPerTrackCall | overhead of QPC including TrackBy-methods | 
+ | Specific Report Helpers | OverheadPerQPCcall | overhead of only the QPC function | 
+ | Specific Report Helpers | Precision | returns maximum precision of this class in seconds | 
+ | Specific Report Helpers | ticsToCollectionsInDictionaryPerID | group stamps from global stamparray into seperate (per tracked ID) collections | 
+ | Specific Report Helpers | stampsToTics_fromArrays | retrieve tics from arrays and return difference | 
+ | Specific Report Helpers | stampsToTics | returns difference between to stamps | 
+ | Specific Report Helpers | ticsToSeconds | convert qpc-tics to seconds | 
+ | Specific Report Helpers | secondsProperString | convert seconds to appropriate readable text | 
+ | General Report Helpers | Min | minimum of two double-values | 
+ | General Report Helpers | Max | maximum of two double-values | 
+ | General Report Helpers | MedianOfFirst_x_Elements | median of a part of a collection | 
+ | General Report Helpers | QuickSortArray | quick sort an array | 
+ | General Report Helpers | RIGHT_AfterLastCharsOf | last part of string | 
+ | General Report Helpers | Array2DToImmediate | print array to console | 
+ | General Report Helpers | Transpose2DArray | flip 2D-array 90 degrees | 
+ 
+![image](https://user-images.githubusercontent.com/10421216/124675037-27548300-debc-11eb-8c59-cc546829a01d.png)
+
+
+ 
 ![image](https://user-images.githubusercontent.com/10421216/124674544-3dae0f00-debb-11eb-8261-cbec18b6963c.png)
 
 
