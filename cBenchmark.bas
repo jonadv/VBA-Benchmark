@@ -13,27 +13,22 @@ Option Explicit
     Private Declare Function QueryPerformanceCounter Lib "kernel32" (stamp As Currency) As Byte
     Private Declare Function QueryPerformanceFrequency Lib "kernel32" (freq As Currency) As Byte
 #End If
+   
+'About the chosen datatype: The fastest possible way (as in with least amount of overhead)
+'to store qpc stamps is to store them in an array as datatype Currency (or as LongLong).
+'Storing the stamps as a UDT (fe LARGE_INTEGER.lowpart and .highpart) takes much longer,
+'as basically two 'seperate' primary datavalues have to be stored. Surprisingly there is no difference
+'in time at all in using either LongLong or Currency, however, datatype LongLong is not availabe
+'on 32-bit machines. Reverting of Currency-returns is required, but that is done after benchmarking
+'finished so it will not effect the benchmark results.
 
-'---> 10 million tics per second
-'---> if freq is 10MHz then:
-'   1 tic = (1 / 10 000 000) seconds
-'   1 tic = 0.0000001 seconds
-'   1 tic = 0.0001 milliseconds
-'   1 tic = 0.1 microseconds
-'   1 tic = 100 nanoseconds
-
-'total tics passed
-'- as Currency -> (QPC2 - QPC1) * 10000
-'- as LongLong -> (QPC2 - QPC1)
-
-'tics to seconds
-' = (QPC2 - QPC1) / QPF
-' = TicDiff / QPF
-
-'tics t to seconds s = t/(s * 1)
-'tics to milliseconds = t/(s * 1e3)
-'tics to microseconds = t/(s * 1e6)
-'tics to nanoseconds = t/(s * 1e9)
+'used definitions:
+'QPC            QueryPerformanceCounter
+'stamp          returnvalue from QPC, which is an accurate 'time'-stamp since computer has been boot
+'QPF            QueryPerformanceFrequency
+'frequency      the amount of QPC-cycles per second, nowadays usually 10MHz on Windows 10 but can differ per machine
+'tic            difference between two QPC time stamps
+'RDTSC          Read Time Stamp Counter, an even more accurate way to benchmark code, but for VBA it would require a custommade .dll
 
 Private freq As Currency                    'frequency is the amount tics per second
 Private stampCount As Long                  'to keep track of postition of next stamp and stampID in arrays
@@ -42,9 +37,7 @@ Private arrStamp() As Currency              'stores QPC stamps
 Private arrStampID() As Byte                'stores id numbers of track calls. Byte = 0-255, so max 256 tracks, using Byte forces ID of 0 or above
 Private dicStampName_ID As Dictionary       'key = custom name, value = StampID
 Private Const fromCurr As Currency = 10000  'QPC and QPF downscale LongLong (actual returntype) with 10000 when they return a value with datatype Currency
-Private stamp_ReportEnd As Currency         'set at start of Report calculation. Prevents output of report when it was less then x amount of seconds ago
-Private time_start As Double
-Private time_end As Double
+Private stamp_ReportEnd As Currency         'is set at end of Report calculation and prevents printing the report when it was less then x amount of seconds ago
 Private Const overheadTestCount As Long = 100 'Overhead is tested in a loop. Lowering this ammount a lot might increase overhead because of CPU branching.
 
 Private Enum TrackID
@@ -55,7 +48,6 @@ Private Enum TrackID
 End Enum
 
 'include setting time unit of output (nanos, millis, seconds, etc). calcualte default at end by total time passed
-'include report to have cycle counts as well as mean, median and std
 
 ' ============================================= '
 ' Class specific Functions
@@ -82,9 +74,11 @@ End Sub
 ' @Pause            - Convenience method to exclude pieces of code, use in combination with .Continue
 ' @Continue         - Use after calling .Pause to continue tracking
 ' @Report           - Generate report
+' @Sleep            - timeout code, alternative for Application.Wait
+' @Wait             - same as method Sleep
 
 Public Sub TrackByName(ByVal strTrackName As String)
-    'intermediate/more convenient way to call track method
+    'intermediate/more convenient way to call track method (but a few cycles slower)
     'if TrackByTheID and TrackByName are used mixed, some tracks might write to the same ID
     'reference type ByVal can save a few clock cycles https://stackoverflow.com/questions/408101/which-is-faster-byval-or-byref
     
@@ -97,13 +91,6 @@ Public Sub TrackByName(ByVal strTrackName As String)
 End Sub
 Public Sub TrackByTheID(ByVal IDnr As Byte)
     'if it runs into an error here, you probably tried to pass a string data type
-    
-    'the fastest possible way (as in with least amount of overhead) to store
-    'cpu stamps of QPC function is to store them in an array as datatype Currency (or as LongLong)
-    'Storing the stamps as a UDT (fe LARGE_INTEGER.lowpart and .highpart) can take twice the time,
-    'as basically two 'seperate' primary datavalues have to be stored. Surprisingly there is no difference
-    'in time at all in using either LongLong or Currency, however, datatype LongLong is not availabe
-    'on 32-bit machines.
     
     'sub was called TrackByID before, but then intellisense shows it as first option/above TrackByName
     'when only typing 'tr'. This way typing 'tr' + tab should be enough.
@@ -156,7 +143,7 @@ End Sub
 Public Sub Sleep(seconds As Double, Optional boDoEventsWhileSleeping As Boolean = True)
 'Same as Application.Wait function, but more accurate and easier to use.
 'a.Sleep 2      <- VS ->     Application.Wait Now + TimeValue("0:00:02")
-'set the boolean to false for more accuracy
+'set boDoEventsWhileSleeping to false for even more accuracy
 Dim startstamp As Currency, restamp As Currency
 QueryPerformanceCounter startstamp
 Do While ticsToSeconds(stampsToTics(startstamp, restamp)) <= seconds
@@ -170,11 +157,12 @@ Public Sub Wait(seconds As Double, Optional boDoEventsWhileWaiting As Boolean = 
 End Sub
 
 ' ============================================= '
-' Private Functions - Specific helpers
+' Private Functions - Specific bench helpers
 ' ============================================= '
-' @Reset
-' @RedimStampArrays
-' @ReportArg
+' @Reset                - reset/re-initialise all variables
+' @RedimStampArrays     - enlarge stamp arrays
+' @ReportArg            - calculate and write report
+
 Private Sub Reset()
 'Sub is private as public method .Start does the same
     QueryPerformanceFrequency freq      'Make sure frequency is set right (in case an instance of this class is declared public static)
@@ -213,7 +201,7 @@ Private Sub ReportArg(Optional ByVal boExtendedReport As Boolean = False, _
 'was called at end of code, then ignore print call from Class_Terminate)
 Dim stamp_ReportStart As Currency
 QueryPerformanceCounter stamp_ReportStart
-If stamp_ReportEnd > 0 Then If ticsToSeconds(stampsToTics(stamp_ReportEnd, stamp_ReportStart)) < 1 Then Exit Sub
+If stamp_ReportEnd > 0 Then If ticsToSeconds(stampsToTics(stamp_ReportEnd, stamp_ReportStart)) <= 1 Then Exit Sub
 
 'Nothing to report when only .Start (1 stamp) was called
 If stampCount < 2 Then GoTo theEnd
@@ -253,7 +241,6 @@ Next i
     
 'seperate TicDiffs into ID-specific collection (most time consuming step in this sub)
 Set dID_colTicDiffs = ticsToCollectionsInDictionaryPerID(arTicDiffs, LBound(arTicDiffs))
-'example result in jsonformat: {"255":[0],"1":[156],"2":[675,766,523,764,651]}
 
 'filter out any unwanted output here
 dID_colTicDiffs.Remove TrackID.id_start & "" 'start tic value is always 0, so always filter out
@@ -427,19 +414,21 @@ Debug.Print ""
 End Sub
 
 ' ============================================= '
-' Private Functions - Specific Helpers
+' Private Functions - Specific Report Helpers
 ' ============================================= '
-' @OverheadPerTrackCall
-' @OverheadPerQPCcall
-' @ticsToCollectionsInDictionaryPerID
-' @ticsToSeconds
-' @secondsProperString
-' @MaxAccuracy
+' @OverheadPerTrackCall                 - overhead of QPC including TrackBy-methods
+' @OverheadPerQPCcall                   - overhead of only the QPC function
+' @Precision                            - returns maximum precision of this class in seconds
+' @ticsToCollectionsInDictionaryPerID   - group stamps from global stamparray into seperate (per tracked ID) collections
+' @stampsToTics_fromArrays              - retrieve tics from arrays and return difference
+' @stampsToTics                         - returns difference between to stamps
+' @ticsToSeconds                        - convert qpc-tics to seconds
+' @secondsProperString                  - convert seconds to appropriate readable text
 
 Private Function OverheadPerTrackCall(NameOrID As Variant, Action As String) As Double
 'calculates the overhead in amount of tics to call methods TrackByTheID and TrackByName.
 'As these two methods adjust (values in) global variables, these global variables
-'are used to calculate the overhead. They are first copied and stored as Static, which
+'are also used to calculate the overhead. They are first copied and stored as Static, which
 'prevents the stamp-arrays from being copied every time an ID or Name is tested.
 
 Dim frst_loop As Long: frst_loop = 1
@@ -526,6 +515,7 @@ Next i
 OverheadPerQPCcall = (arr(UBound(arr)) - arr(LBound(arr))) * fromCurr / overheadTestCount
 End Function
 Private Function Precision() As Double
+'returns maximum available precision of this benchmark class on the machine it runs in (full) seconds.
 'As described in microsoft docs https://docs.microsoft.com/en-us/windows/win32/sysinfo/acquiring-high-resolution-time-stamps#low-level-hardware-clock-characteristics
 
 'Tick Interval = 1/(Performance Frequency) = Resolution
@@ -541,6 +531,10 @@ Precision = Max(resolution, accesTime)
 End Function
 
 Private Function ticsToCollectionsInDictionaryPerID(ByRef arTdifs() As Currency, ByVal lb As Long) As Dictionary
+'Groups the global stamp-array into seperate collections per ID
+'Returns a dictionary where key = TrackID, value = collection of tics
+'example result in jsonformat: {"255":[0],"1":[156],"2":[675,766,523,764,651]}
+
   Set ticsToCollectionsInDictionaryPerID = New Dictionary
   
   Dim offset As Long
@@ -567,28 +561,44 @@ End If
 End Function
 
 Private Function stampsToTics(ByVal stampBefore As Currency, ByVal stampAfter As Currency) As Currency
-'Calculates the difference in between to QPC stamps and upscales them from Currency to whole numbers
+'Calculates the difference in between two QPC stamps and upscales them from Currency to whole numbers
 
 'example returns of QPC:
 '- as Currency -> 304462680,3775    --> needs upscaling by 10 000
 '- as LongLong -> 3044626803775
+'--->
+'- as Currency -> (QPC2 - QPC1) * 10000
+'- as LongLong -> (QPC2 - QPC1)
 
 'example returns of QPF (is system specific, but commonly 10Mhz on Windows 10)
 'with a usual QPF on windows 10 (10MHz):
 '- as Currency ->     1000  =      1 000
 '- as LongLong -> 10000000  = 10 000 000
 
+'---> if freq is 10MHz then:
+'---> 10 million tics per second
+'   1 tic = (1 / 10 000 000) seconds
+'   1 tic = 0.0000001 seconds
+'   1 tic = 0.0001 milliseconds
+'   1 tic = 0.1 microseconds
+'   1 tic = 100 nanoseconds
+
+'tics t to seconds s = t/(s * 1)
+'tics to milliseconds = t/(s * 1e3)
+'tics to microseconds = t/(s * 1e6)
+'tics to nanoseconds = t/(s * 1e9)
+
 stampsToTics = (stampAfter - stampBefore) * fromCurr
 End Function
 Private Function ticsToSeconds(ByVal tics As Currency) As Double
+'returns time in full seconds
     If Int(tics) <> tics Or Int(freq) <> freq Then err.Raise 9999999, , "QPC or QPF returns with datatype As Currency downscales the returns with 10 000. Upscale both returns before calling this funciton."
     'Int(freq) is actually not a proper check to see if it has been upscaled, as it is often also a round number when downscaled (10mhz)
-    ticsToSeconds = tics / freq 'time in (full) seconds
+    ticsToSeconds = tics / freq
 End Function
 Private Function secondsProperString(ByVal t As Double, _
                 Optional ByVal boForceMilliSeconds As Boolean = False, _
                 Optional ByVal boForceNanoSeconds As Boolean = False) As String
-                
 If boForceNanoSeconds Then boForceMilliSeconds = False
 Dim res As String
 
@@ -619,16 +629,16 @@ ElseIf t > (10 / 1000000#) And Not boForceNanoSeconds Then                      
 ElseIf t > (10 / 1000000000#) Or boForceNanoSeconds Then                        'nanosecond (1 ns = 10-E9 s)
     res = Round(t * 1000000000#) & " ns"
 
-'Any value below this is probably below the maximum preciscion of the QPC function (and likely cause of overhead correction).
-'max precision: 1 / frequency * QPC overhead.
+'Any value below this is probably below the maximum precision of the QPC function (and likely cause of overhead correction).
+'max precision = 1 / frequency * QPC overhead.
 
 ElseIf t > (10 / 1000000000000#) Then res = Round(t * 1000000000000#) & " ps"   'picosecond (1 ps = 10-E12 s)
 ElseIf t > (10 / 1E+15) Then res = Round(t * 1E+15) & " fs"                     'femtosecond (1 fs = 10-E15 s)
 ElseIf t > (10 / 1E+18) Then res = Round(t * 1E+18) & " as"                     'attosecond (1 as = 10-E18 s)
-ElseIf t > (10 / 1E+21) Then res = Round(t * 1E+21) & " zs"                     'zeptosecond (1 as = 10-E21 s) -> shortest time ever measured was 247 zeptoseconds
+ElseIf t > (10 / 1E+21) Then res = Round(t * 1E+21) & " zs"                     'zeptosecond (1 as = 10-E21 s) -> shortest time ever measured was 247 zeptoseconds :)
 ElseIf t > (10 / 1E+24) Then res = Round(t * 1E+24) & " ys"                     'yoctosecond (1 as = 10-E24 s)
 '"For Decimal expressions, any fractional value less than 1E-28 might be lost." (.net docs)
-'https://docs.microsoft.com/en-us/dotnet/visual-basic/language-reference/operators/comparison-operators
+
 ElseIf t < 0 Then
     res = "<0"
     'happens when overhead correction is larger then actual tics passed (to lower this chance use minimum overhead instead of average).
@@ -644,15 +654,16 @@ End If
 secondsProperString = res
 End Function
 
-
 ' ============================================= '
-' Private Functions - General Helpers
+' Private Functions - General Report Helpers
 ' ============================================= '
-' @Min
-' @Max
-' @MedianOfFirst_x_Elements
-' @RIGHT_AfterLastCharsOf
-' @Array2DToImmediate
+' @Min                          - minimum of two double-values
+' @Max                          - maximum of two double-values
+' @MedianOfFirst_x_Elements     - median of a part of a collection
+' @QuickSortArray               - quick sort an array
+' @RIGHT_AfterLastCharsOf       - last part of string
+' @Array2DToImmediate           - print array to console
+' @Transpose2DArray             - flip 2D-array 90 degrees
 
 Private Function Min(ByVal x As Double, ByVal y As Double) As Double
     If x < y Then Min = x Else Min = y
@@ -709,6 +720,7 @@ Private Function QuickSortArray(ByRef vArray As Variant, inLow As Long, inHi As 
 End Function
 
 Private Function RIGHT_AfterLastCharsOf(ByVal strLeft As String, ByVal chars As String) As String
+'returns the part of the string that is most right to given char(s)
 Dim s() As String
 s = Split(strLeft, chars, -1, vbBinaryCompare)
 RIGHT_AfterLastCharsOf = s(UBound(s))
