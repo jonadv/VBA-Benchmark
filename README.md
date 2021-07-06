@@ -70,7 +70,7 @@ Everytime `TrackByName` is called a 'CPU-timestamp' is stored. After you're code
 
 
 **Public functions overview**
- | Scope | Method Name | Description |
+ | Type | Method Name | Description |
  | ----- | ----------- | ----------- |
  | Public | TrackByName | Same as @TrackByTheID but more convenient (and thus with a bit more overhead) | 	
  | Public | TrackByTheID | Store QPC (cycle counts) in an array | 	
@@ -91,45 +91,21 @@ Everytime `TrackByName` is called a 'CPU-timestamp' is stored. After you're code
  | Bench helpers | Reset | reset/re-initialise all variables | 
  | Bench helpers | RedimStampArrays | enlarge stamp arrays | 
  | Bench helpers | ReportArg | calculate and write report | 
- | Specific Report Helpers | OverheadPerTrackCall | overhead of QPC including TrackBy-methods | 
- | Specific Report Helpers | OverheadPerQPCcall | overhead of only the QPC function | 
- | Specific Report Helpers | Precision | returns maximum precision of this class in seconds | 
- | Specific Report Helpers | ticsToCollectionsInDictionaryPerID | group stamps from global stamparray into seperate (per tracked ID) collections | 
- | Specific Report Helpers | stampsToTics_fromArrays | retrieve tics from arrays and return difference | 
- | Specific Report Helpers | stampsToTics | returns difference between to stamps | 
- | Specific Report Helpers | ticsToSeconds | convert qpc-tics to seconds | 
- | Specific Report Helpers | secondsProperString | convert seconds to appropriate readable text | 
- | General Report Helpers | Min | minimum of two double-values | 
- | General Report Helpers | Max | maximum of two double-values | 
- | General Report Helpers | MedianOfFirst_x_Elements | median of a part of a collection | 
- | General Report Helpers | QuickSortArray | quick sort an array | 
- | General Report Helpers | RIGHT_AfterLastCharsOf | last part of string | 
- | General Report Helpers | Array2DToImmediate | print array to console | 
- | General Report Helpers | Transpose2DArray | flip 2D-array 90 degrees | 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+ | Report Helpers | OverheadPerTrackCall | overhead of QPC including TrackBy-methods | 
+ | Report Helpers | OverheadPerQPCcall | overhead of only the QPC function | 
+ | Report Helpers | Precision | returns maximum precision of this class in seconds | 
+ | Report Helpers | ticsToCollectionsInDictionaryPerID | group stamps from global stamparray into seperate (per tracked ID) collections | 
+ | Report Helpers | stampsToTics_fromArrays | retrieve tics from arrays and return difference | 
+ | Report Helpers | stampsToTics | returns difference between to stamps | 
+ | Report Helpers | ticsToSeconds | convert qpc-tics to seconds | 
+ | Report Helpers | secondsProperString | convert seconds to appropriate readable text | 
+ | General Helpers | Min | minimum of two double-values | 
+ | General Helpers | Max | maximum of two double-values | 
+ | General Helpers | MedianOfFirst_x_Elements | median of a part of a collection | 
+ | General Helpers | QuickSortArray | quick sort an array | 
+ | General Helpers | RIGHT_AfterLastCharsOf | last part of string | 
+ | General Helpers | Array2DToImmediate | print array to console | 
+ | General Helpers | Transpose2DArray | flip 2D-array 90 degrees | 
 
 
 
