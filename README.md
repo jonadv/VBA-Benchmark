@@ -10,8 +10,6 @@ Includes a convinience method to use instead of Application.Wait.
 - Accuracy to nanoseconds
 - No delay of console logging/using Debug.Print
 - Convenient to use
-- Identify parts of code
-- Re-use same name for pieces of code all over the place
 - Profile code which is spread out over multiple functions or modules
 - Up to 256 different tracks
 
