@@ -51,7 +51,7 @@ End Sub
 
 **Prints:**
 
-```vba
+```
 IDnr  Name             Count  Sum of tics  Percentage  Time sum
 0     Initialisations      1          191       0,01%     19 us
 1     Slept                2    1.005.608      26,95%    101 ms
