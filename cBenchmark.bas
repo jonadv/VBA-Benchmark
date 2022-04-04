@@ -717,8 +717,8 @@ Private Function QuickSortArray(ByRef vArray As Variant, inLow As Long, inHi As 
        End If
     Wend
     
-    If (inLow < tmpHi) Then QuickSort vArray, inLow, tmpHi
-    If (tmpLow < inHi) Then QuickSort vArray, tmpLow, inHi
+    If (inLow < tmpHi) Then QuickSortArray vArray, inLow, tmpHi
+    If (tmpLow < inHi) Then QuickSortArray vArray, tmpLow, inHi
 End Function
 
 Private Function RIGHT_AfterLastCharsOf(ByVal strLeft As String, ByVal chars As String) As String
